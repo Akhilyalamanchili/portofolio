@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f3efe6" />
+    <meta name="description" content="Step into Akhil's little corner of the internet. An interactive 3D bookshelf of ideas, skills, and things built with care." />
+    <title>Akhil — A shelf full of stories</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="site-header">
+        <div class="wordmark"><span class="monogram" aria-hidden="true">a.</span><span>AKHIL<span class="wordmark-sub">A PERSONAL COLLECTION</span></span></div>
+        <div class="header-note"><span class="status-dot"></span> Always a work in progress</div>
+        <span class="edition">VOL. 01 / 2026</span>
+      </header>
+      <main>
+        <section class="workspace" aria-labelledby="hero-title">
+          <div class="intro">
+            <p class="eyebrow"><span></span> WELCOME TO MY LITTLE CORNER</p>
+            <h1 id="hero-title">A shelf full<br> of <em>stories.</em></h1>
+            <p class="intro-copy">Some written in code.<br> Some still being written.</p>
+            <p class="intro-detail">I’m Akhil. This is my space to build,<br class="desktop-break"> explore, and collect what I learn.<br class="desktop-break"> Get to know me, one book at a time.</p>
+            <div class="explore-note"><svg viewBox="0 0 46 35" fill="none" aria-hidden="true"><path d="M2 3c5 21 22 28 40 20m-11-7 12 6-7 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Pick a book.<br><em>There’s a story inside.</em></span></div>
+          </div>
+          <div id="room" class="room" role="group" aria-label="Interactive 3D workspace. Select a book on the shelves to explore the portfolio.">
+            <div class="room-loading" id="room-loading"><span class="loading-book"></span><p>Arranging the bookshelf…</p></div>
+            <div id="book-targets" class="book-targets" aria-label="Portfolio books"></div>
+            <div id="book-preview" class="book-preview" role="status" aria-live="polite" hidden></div>
+            <div class="scene-caption"><span class="tiny-spark">✳</span> A quiet place for curious things.</div>
+          </div>
+          <div class="mobile-collection" aria-label="Larger book covers for touch"><p class="collection-label">THE COLLECTION <span>Pick your next chapter</span></p><div id="mobile-books" class="mobile-books"></div></div>
+          <div class="shelf-guide"><span class="guide-icon" aria-hidden="true">⌁</span><p><strong>A little curiosity goes a long way.</strong><span class="desktop-instructions">Hover to peek · Click to open a book</span><span class="touch-instructions">Tap a book to read its story</span></p><span class="guide-count">12 BOOKS<br>ENDLESS CURIOSITY</span></div>
+        </section>
+      </main>
+      <footer class="site-footer"><span>BUILT WITH CURIOSITY & A LITTLE CAFFEINE</span><span class="footer-middle">Make yourself at home.</span><span>© <span id="year">2026</span> AKHIL</span></footer>
+    </div>
+    <dialog id="reader" class="reader" aria-labelledby="reader-title">
+      <button class="close-reader" aria-label="Close book">×</button>
+      <div class="reader-cover"><span class="cover-edition">THE PERSONAL COLLECTION</span><span class="cover-symbol" aria-hidden="true">✳</span><div><p id="reader-category"></p><h2 id="reader-title"></h2></div><span id="reader-volume"></span></div>
+      <div class="reader-pages" tabindex="0" role="region" aria-label="Chapter content"><div class="page-top"><span>FROM AKHIL’S BOOKSHELF</span><span id="page-number"></span></div><div id="reader-content"></div><div class="page-bottom"><span>Every chapter starts with curiosity.</span><span>✦</span></div></div>
+    </dialog>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
