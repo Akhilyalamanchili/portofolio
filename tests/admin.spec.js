@@ -48,9 +48,8 @@ test('admin edits survive reload and reach the shelf and reader', async ({ page 
     };
   });
   await shelf.goto(baseURL);
-  await expect(shelf.getByRole('button', { name: 'Open About me', exact: true })).toBeVisible();
+  await expect(shelf.getByRole('button', { name: `Open ${JSON.parse(original)[0].title}`, exact: true })).toBeVisible();
   await page.getByLabel('Book name', { exact: true }).fill('My story');
-  await page.getByLabel('Spine label').fill('MY STORY');
   await page.getByLabel('Cover color').fill('#386149');
   await page.getByLabel('Chapter heading').fill('Hello from my edited book');
   await page.getByLabel('Introduction', { exact: true }).fill('First line\n\nA second paragraph.');
@@ -70,7 +69,7 @@ test('admin edits survive reload and reach the shelf and reader', async ({ page 
   await page.reload();
   await expect(page.getByLabel('Book name', { exact: true })).toHaveValue('My story');
   const stored = JSON.parse(await readFile(join(directory, 'src/books.json'), 'utf8'));
-  expect(stored[0].spine).toBe('MY STORY');
+  expect(stored[0].spine).toBe('My story');
   expect(stored[0].color).toBe('#386149');
   expect(stored[0].sections).toHaveLength(4);
   expect(stored[1].title).toBe('My frontend craft');
@@ -84,6 +83,35 @@ test('admin edits survive reload and reach the shelf and reader', async ({ page 
   await expect(shelf.locator('.content-section').nth(2)).toContainText('<script>literal text</script>');
   await expect(shelf.locator('.sample-note')).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test('renaming a book repaints its actual 3D spine in an already-open shelf', async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    window.printedSpineText = [];
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+      if (this.fillStyle === '#fff5df') window.printedSpineText.push({ text, font: this.font });
+      return fillText.call(this, text, ...args);
+    };
+  });
+  await page.goto(baseURL);
+  await expect(page.locator('#room')).toHaveClass(/is-ready/);
+  await expect(page.locator('#room')).not.toHaveClass(/fallback/);
+  const initialTitle = JSON.parse(original)[0].title;
+  await expect.poll(() => page.evaluate(() => window.printedSpineText.map(line => line.text).join(' '))).toContain(initialTitle);
+  const editor = await page.context().newPage();
+  await editor.goto(`${baseURL}/admin`);
+  await editor.getByLabel('Book name', { exact: true }).fill('My coding profiles');
+  await editor.getByRole('button', { name: 'Save all changes' }).click();
+  await expect(editor.locator('#save-state')).toHaveText('All changes saved');
+  await expect.poll(() => page.evaluate(() => window.printedSpineText?.map(line => line.text).join(' '))).toContain('My coding profiles');
+  await expect(page.locator('#room')).not.toHaveClass(/fallback/);
+  await expect(page.getByRole('button', { name: 'Open My coding profiles', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.printedSpineText.every(line => parseInt(line.font.match(/(\d+)px/)[1]) >= 64))).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('renamed-spines.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Dark mode', exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath('renamed-spines-dark.png'), fullPage: true });
+  await editor.close();
 });
 
 test('mobile editor supports removal, discard, search, and exports without overflowing', async ({ page }, testInfo) => {

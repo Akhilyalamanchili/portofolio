@@ -13,8 +13,10 @@ let scene, activeButton;
 const canHover = window.matchMedia('(hover: hover)');
 const themeToggle = document.getElementById('theme-toggle');
 const lampToggle = document.getElementById('lamp-toggle');
+const curtainToggle = document.getElementById('curtain-toggle');
 let theme = document.documentElement.dataset.theme;
 let lampOn = true;
+let curtainsClosed = false;
 
 function applyTheme(nextTheme) {
   theme = nextTheme;
@@ -34,6 +36,12 @@ lampToggle.addEventListener('click', () => {
   lampOn = !lampOn;
   scene?.setLamp(lampOn);
   lampToggle.setAttribute('aria-pressed', String(lampOn));
+  hidePreview();
+});
+curtainToggle.addEventListener('click', () => {
+  curtainsClosed = !curtainsClosed;
+  scene?.setCurtains(curtainsClosed);
+  curtainToggle.setAttribute('aria-pressed', String(curtainsClosed));
   hidePreview();
 });
 
@@ -152,6 +160,7 @@ document.getElementById('year').textContent = new Date().getFullYear();
 function showFallback() {
   scene = undefined;
   lampToggle.hidden = true;
+  curtainToggle.hidden = true;
   room.classList.add('fallback', 'is-ready');
   document.getElementById('room-loading').hidden = true;
   if (!room.querySelector('.fallback-label')) room.append(element('p', 'Your collection, in a lighter view. Select any book to explore.', 'fallback-label'));
@@ -162,6 +171,7 @@ try {
     room.classList.add('is-ready');
     document.getElementById('room-loading').hidden = true;
     lampToggle.hidden = room.classList.contains('fallback');
+    curtainToggle.hidden = room.classList.contains('fallback');
   }, showFallback);
   scene.setTheme(theme);
   scene.setLamp(lampOn);

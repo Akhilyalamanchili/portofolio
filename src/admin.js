@@ -16,7 +16,7 @@ document.body.innerHTML = `
       <div class="writing-area">
         <form id="book-form"><div class="editor-heading"><div><p class="eyebrow" id="editing-volume"></p><h2 id="editing-title"></h2></div><button type="button" id="discard" class="text-button" disabled>Discard book changes</button></div>
           <fieldset><legend>01 <span>The cover</span></legend><p class="field-hint">The first impression, on the shelf and in the reader.</p><div class="field-grid">
-            <label>Book name<input name="title" required maxlength="20000"></label><label>Spine label<input name="spine" required maxlength="20000"></label>
+            <label class="full">Book name<input name="title" required maxlength="20000" aria-describedby="book-name-hint"></label><p class="field-hint full" id="book-name-hint">Printed on the 3D book spine and shown in the reader.</p>
             <label>Category<input name="category" maxlength="20000"></label><div class="field-grid compact"><label>Volume<input name="number" maxlength="20000"></label><label>Cover color<input name="color" type="color"></label></div>
             <label class="full">Short summary<textarea name="summary" rows="3" maxlength="20000"></textarea><span class="field-hint">Shown when someone hovers over this book.</span></label>
           </div></fieldset>
@@ -167,7 +167,7 @@ function renderSections() {
 }
 function renderForm() {
   const book = current();
-  for (const key of ['title', 'spine', 'category', 'number', 'color', 'summary', 'heading', 'lead', 'note']) form.elements[key].value = book[key];
+  for (const key of ['title', 'category', 'number', 'color', 'summary', 'heading', 'lead', 'note']) form.elements[key].value = book[key];
   form.elements.tags.value = book.tags.join(', ');
   form.elements.showReference.checked = book.showReference;
   renderSections(); renderPreview(); renderList(); updateState();
@@ -179,6 +179,8 @@ form.addEventListener('input', event => {
   if (name === 'tags') current().tags = value.split(',').map(tag => tag.trim()).filter(Boolean);
   else if (name === 'showReference') current().showReference = checked;
   else if (Object.hasOwn(current(), name)) current()[name] = value;
+  // Keep the legacy export field in sync; the shelf uses the canonical title.
+  if (name === 'title') current().spine = value;
   changed();
 });
 $('#book-search').addEventListener('input', renderList);

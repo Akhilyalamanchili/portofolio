@@ -30,9 +30,9 @@ The production site is generated in `dist/` and can be served by any static host
 
 ## Personalize
 
-Run `npm run dev`, then open **`http://localhost:5173/admin`** (use the port Vite prints if different). Select a book to edit its name, spine label, color, category, volume, summary, chapter heading, introduction, tags, and closing note. Add, remove, and reorder content sections, including their optional supporting details. The preview updates as you type; **Save all changes** (or Ctrl/Cmd+S) saves drafts across all books.
+Run `npm run dev`, then open **`http://localhost:5173/admin`** (use the port Vite prints if different). Select a book to edit its name, color, category, volume, summary, chapter heading, introduction, tags, and closing note. Add, remove, and reorder content sections, including their optional supporting details. The preview updates as you type; **Save all changes** (or Ctrl/Cmd+S) saves drafts across all books.
 
-Changes are written directly to **`src/books.json`**, the shared source for the 3D shelf and reader. Open bookshelf tabs refresh after saving, and the next `npm run build` includes the updated content. Line breaks are preserved, and copy is rendered as plain text. `src/content.js` exports this shared collection. Book identifiers and the twelve shelf positions stay fixed.
+Changes are written directly to **`src/books.json`**, the shared source for the 3D shelf and reader. Open bookshelf tabs refresh after saving, and the next `npm run build` includes the updated content. Line breaks are preserved, and copy is rendered as plain text. `src/content.js` exports this shared collection. The book name also supplies the 3D spine lettering, so renaming a book updates every view. Spine titles use large, wrapped, high-contrast labels; exceptionally long names are shortened on the spine and remain complete in the hover preview and reader. The legacy `spine` JSON field is retained for compatibility but does not override the name. Book identifiers and the twelve shelf positions stay fixed.
 
 The editor warns before leaving with unsaved changes, detects conflicting saves from another tab, and retains the previous save in `.book-editor/books.previous.json`. **Discard book changes** restores only the selected book; **Export draft as JSON** downloads all current drafts for backup. You can also edit `src/books.json` directly.
 

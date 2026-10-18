@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { drawSpineTitle } from './spine-title.js';
 
 export function createRoom(container, books, onReady, onFailure) {
   const scene = new THREE.Scene();
@@ -145,6 +146,45 @@ export function createRoom(container, books, onReady, onFailure) {
   for (const y of [1.29, 3.04, 4.83]) box(2.46, .09, .17, white, -1.96, y, -1.77);
   box(.055, 3.5, .12, white, -1.96, 3.06, -1.77);
   box(2.65, .12, .44, wood, -1.96, 1.27, -1.68);
+  // Two gathered linen panels expand from the sides to meet at the centre.
+  const curtainMaterial = mat('#b3a07d', { side: THREE.DoubleSide, bumpMap: fabric, bumpScale: .012, roughness: 1 });
+  const curtainRod = cylinder(.025, .025, 2.94, brass, -1.96, 4.9, -1.46);
+  curtainRod.rotation.z = Math.PI / 2;
+  for (const x of [-3.46, -.46]) sphere(.045, brass, x, 4.9, -1.46);
+  const curtains = [-1, 1].map(side => {
+    const geometry = new THREE.PlaneGeometry(1, 3.48, 64, 24);
+    const panel = new THREE.Mesh(geometry, curtainMaterial);
+    panel.position.set(-1.96 + side * 1.32, 3.08, -1.49);
+    panel.castShadow = true; panel.receiveShadow = true;
+    room.add(panel);
+    const rings = Array.from({ length: 9 }, () => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.038, .009, 8, 16), brass);
+      ring.rotation.y = Math.PI / 2; ring.position.set(panel.position.x, 4.88, -1.46);
+      room.add(ring); return ring;
+    });
+    return { panel, side, rings };
+  });
+  let curtainLevel = 0, curtainTarget = 0, night = false;
+  function positionCurtains() {
+    const width = THREE.MathUtils.lerp(.24, 1.335, curtainLevel);
+    for (const { panel, side, rings } of curtains) {
+      const positions = panel.geometry.attributes.position;
+      const uv = panel.geometry.attributes.uv;
+      for (let i = 0; i < positions.count; i++) {
+        const u = uv.getX(i), v = uv.getY(i);
+        const fold = Math.cos(u * Math.PI * 16);
+        const billow = Math.sin(v * Math.PI) * Math.sin(curtainLevel * Math.PI) * .055;
+        positions.setXYZ(i, -side * u * width, (v - .5) * 3.48 + (1 - v) * fold * .012,
+          fold * (.045 + curtainLevel * .025) + billow * Math.sin(u * Math.PI * 4));
+      }
+      positions.needsUpdate = true;
+      panel.geometry.computeVertexNormals();
+      panel.geometry.computeBoundingSphere();
+      rings.forEach((ring, i) => { ring.position.x = panel.position.x - side * i / 8 * width; });
+    }
+    renderer.shadowMap.needsUpdate = true;
+  }
+  positionCurtains();
   // Subtle sunlight stripes on the floor.
   const sunPatch = mat('#f9df9c', { transparent: true, opacity: .15, depthWrite: false });
   for (let i = 0; i < 3; i++) { const patch = box(.6, .005, 1.8, sunPatch, -.8 + i * .65, .04, 1.15); patch.rotation.y = -.4; patch.castShadow = false; }
@@ -245,11 +285,20 @@ export function createRoom(container, books, onReady, onFailure) {
       ctx.strokeStyle = '#e5d2a080'; ctx.lineWidth = 2;
       for (const yy of [43, 52, 704, 713]) { ctx.beginPath(); ctx.moveTo(25, yy); ctx.lineTo(w - 25, yy); ctx.stroke(); }
       ctx.fillStyle = '#f3e8cd'; ctx.textAlign = 'center'; ctx.font = '28px Georgia'; ctx.fillText(book.number, w / 2, 105);
-      ctx.save(); ctx.translate(w / 2, 390); ctx.rotate(-Math.PI / 2); ctx.font = 'bold 39px Georgia'; ctx.fillText(book.spine, 0, 13, 480); ctx.restore();
       ctx.font = '34px Georgia'; ctx.fillText('✦', w / 2, 664);
     });
     const spineMaterial = mat('#ffffff', { map: tex, bumpMap: fabric, bumpScale: .004, roughness: .62 });
     const spine = box(width, height, .07, [cover, cover, cover, cover, spineMaterial, cover], 0, 0, .42, group, .018);
+    const titleTexture = canvasTexture(Math.round(1536 * width / height), 1536, (ctx, w, h) => {
+      ctx.scale(2, 2);
+      drawSpineTitle(ctx, book.title, w / 2, h / 2);
+    });
+    // Keep printed names crisp and legible even with the room lights dimmed.
+    const titleLabel = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({
+      map: titleTexture, transparent: true, toneMapped: false, depthWrite: false,
+    }));
+    titleLabel.position.set(0, 0, .461);
+    group.add(titleLabel);
     for (const y of [-height * .42, height * .42]) {
       box(width * .92, .014, .012, brass, 0, y, .458, group, .004);
     }
@@ -413,12 +462,52 @@ export function createRoom(container, books, onReady, onFailure) {
   sunlight.shadow.normalBias = .018; sunlight.shadow.bias = -.00008;
   scene.add(sunlight, sunlight.target);
   const fill = new THREE.DirectionalLight('#edf2df', .85); fill.position.set(5, 4, 3); scene.add(fill);
+  function updateDaylight() {
+    // Indirect daylight falls with the opening; a little light filters through the linen.
+    const opening = 1 - curtainLevel;
+    scene.environmentIntensity = (night ? .1 : .28) * (.35 + .65 * opening);
+    ambient.intensity = (night ? .22 : .5) * (.3 + .7 * opening);
+    hemisphere.intensity = (night ? .5 : 1.25) * (.22 + .78 * opening);
+    sunlight.intensity = (night ? .45 : 2.6) * (.06 + .94 * opening);
+    fill.intensity = (night ? .3 : .85) * (.3 + .7 * opening);
+    sunPatch.opacity = night ? 0 : .15 * opening * opening;
+  }
+  function updateCurtains(delta) {
+    if (curtainLevel === curtainTarget) return;
+    curtainLevel = reducedMotion.matches ? curtainTarget
+      : THREE.MathUtils.lerp(curtainTarget, curtainLevel, Math.exp(-delta / .24));
+    if (Math.abs(curtainLevel - curtainTarget) < .002) curtainLevel = curtainTarget;
+    positionCurtains();
+    updateDaylight();
+  }
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.ShadowMaterial({ opacity: .11 }));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = -.245; shadow.receiveShadow = true; scene.add(shadow);
 
   let activeBook = null, frameId, previousFrameTime = 0;
   const hits = document.getElementById('book-targets');
   const lampHit = document.getElementById('lamp-toggle');
+  const curtainHit = document.getElementById('curtain-toggle');
+  const curtainRaycaster = new THREE.Raycaster();
+  const curtainPointer = new THREE.Vector2();
+  const curtainPanels = curtains.map(({ panel }) => panel);
+  function hitsCurtain(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    curtainPointer.set((event.clientX - rect.left) / rect.width * 2 - 1,
+      1 - (event.clientY - rect.top) / rect.height * 2);
+    curtainRaycaster.setFromCamera(curtainPointer, camera);
+    if (!curtainRaycaster.intersectObjects(curtainPanels, false).length) return false;
+    // Furniture and plants in front of the fabric should keep their own hit area.
+    const nearest = curtainRaycaster.intersectObjects(room.children, true)
+      .find(hit => hit.object.visible);
+    return nearest && curtainPanels.includes(nearest.object);
+  }
+  renderer.domElement.addEventListener('click', event => {
+    if (hitsCurtain(event)) curtainHit.click();
+  });
+  renderer.domElement.addEventListener('pointermove', event => {
+    renderer.domElement.style.cursor = hitsCurtain(event) ? 'pointer' : '';
+  });
+  renderer.domElement.addEventListener('pointerleave', () => { renderer.domElement.style.cursor = ''; });
   const lampBounds = new THREE.Box3().setFromObject(lampGroup);
   function projectTargets() {
     const w = container.clientWidth, h = container.clientHeight;
@@ -442,12 +531,16 @@ export function createRoom(container, books, onReady, onFailure) {
     const top = Math.min(...corners.map(p => p.y)), bottom = Math.max(...corners.map(p => p.y));
     const hitWidth = Math.max(44, right - left + 12), hitHeight = Math.max(44, bottom - top + 12);
     Object.assign(lampHit.style, { left: `${(left + right - hitWidth) / 2}px`, top: `${(top + bottom - hitHeight) / 2}px`, width: `${hitWidth}px`, height: `${hitHeight}px` });
+    // An invisible, keyboard-accessible touch target sits on the gathered fabric.
+    const curtainControl = new THREE.Vector3(-3.16, 3.65, -1.42).project(camera);
+    Object.assign(curtainHit.style, { left: `${(curtainControl.x + 1) * w / 2}px`, top: `${(1 - curtainControl.y) * h / 2}px` });
   }
   bookObjects.forEach(o => o.group.userData.baseY = o.baseY);
   function render(time = 0) {
     const delta = Math.min(Math.max((time - previousFrameTime) / 1000, 0), .1);
     previousFrameTime = time;
     updateLamp(delta);
+    updateCurtains(delta);
     let booksMoving = false;
     for (const object of bookObjects) {
       const selected = activeBook === object.book.id;
@@ -464,7 +557,7 @@ export function createRoom(container, books, onReady, onFailure) {
     }
     renderer.render(scene, camera);
     // Static lighting changes reuse shadow maps; stop drawing once motion settles.
-    if ((booksMoving || lampLevel !== lampTarget) && !document.hidden) frameId = requestAnimationFrame(render);
+    if ((booksMoving || lampLevel !== lampTarget || curtainLevel !== curtainTarget) && !document.hidden) frameId = requestAnimationFrame(render);
     else frameId = null;
   }
   function requestRender() {
@@ -501,20 +594,20 @@ export function createRoom(container, books, onReady, onFailure) {
       if (reducedMotion.matches) updateLamp(0);
       requestRender();
     },
+    setCurtains(closed) {
+      curtainTarget = closed ? 1 : 0;
+      if (reducedMotion.matches) updateCurtains(0);
+      requestRender();
+    },
     setTheme(theme) {
-      const night = theme === 'dark';
-      scene.environmentIntensity = night ? .1 : .28;
-      ambient.intensity = night ? .22 : .5;
+      night = theme === 'dark';
       ambient.color.set(night ? '#b8cbe0' : '#fff2d4');
-      hemisphere.intensity = night ? .5 : 1.25;
       hemisphere.color.set(night ? '#9aafd0' : '#f5f0d8');
       hemisphere.groundColor.set(night ? '#343d40' : '#8b8872');
-      sunlight.intensity = night ? .45 : 2.6;
       sunlight.color.set(night ? '#9eb8e4' : '#ffe7bd');
-      fill.intensity = night ? .3 : .85;
       fill.color.set(night ? '#b4c9e7' : '#edf2df');
       windowMaterial.color.set(night ? '#415575' : '#ffffff');
-      sunPatch.opacity = night ? 0 : .15;
+      updateDaylight();
       requestRender();
     },
     resize, renderer, scene,

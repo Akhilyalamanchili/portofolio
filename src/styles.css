@@ -136,6 +136,8 @@ h1 em { font-weight: 400; color: #78825c; }
 .lamp-hit { position: absolute; padding: 0; border: 1px solid transparent; border-radius: 12px; background: transparent; cursor: pointer; touch-action: manipulation; }
 .lamp-hit:focus-visible { border-color: #c4a26880; }
 .room.fallback .lamp-hit { display: none; }
+.curtain-toggle { position: absolute; transform: translate(-50%, -50%); width: 44px; height: 44px; padding: 0; border: 0; border-radius: 3px; background: transparent; cursor: pointer; touch-action: manipulation; }
+.room.fallback .curtain-toggle { display: none; }
 
 /* Evening palette keeps the same room and page layout. */
 :root[data-theme='light'] { color-scheme: light; }

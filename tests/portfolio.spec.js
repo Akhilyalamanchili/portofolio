@@ -42,7 +42,7 @@ test('keyboard readers can open and close a book with focus restored', async ({ 
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Dark mode', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Open About me', exact: true })).toBeFocused();
+  await expect(page.locator('#book-targets button').first()).toBeFocused();
   await expect(page.locator('#book-preview')).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'Close book' })).toBeFocused();
@@ -52,7 +52,7 @@ test('keyboard readers can open and close a book with focus restored', async ({ 
   await expect(page.getByRole('button', { name: 'Close book' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).not.toBeVisible();
-  await expect(page.getByRole('button', { name: 'Open About me', exact: true })).toBeFocused();
+  await expect(page.locator('#book-targets button').first()).toBeFocused();
 });
 
 test('mobile supports touch opening, scrolling the full content, and dismissal', async ({ browser }) => {
@@ -64,6 +64,11 @@ test('mobile supports touch opening, scrolling the full content, and dismissal',
   await expect(lamp).toHaveAttribute('aria-pressed', 'false');
   await lamp.tap();
   await expect(lamp).toHaveAttribute('aria-pressed', 'true');
+  const curtains = page.getByRole('button', { name: 'Window curtains', exact: true });
+  await curtains.tap();
+  await expect(curtains).toHaveAttribute('aria-pressed', 'true');
+  await curtains.tap();
+  await expect(curtains).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: 'Open Selected work', exact: true }).tap();
   await expect(page.locator('#reader-title')).toHaveText('Selected work');
   await page.locator('.sample-note').scrollIntoViewIfNeeded();
@@ -88,6 +93,7 @@ test('WebGL unavailable still provides all book content', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#room')).toHaveClass(/fallback/);
   await expect(page.getByRole('button', { name: 'Desk lamp', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Window curtains', exact: true })).toBeHidden();
   await page.getByRole('button', { name: 'Open Say hello', exact: true }).click();
   await expect(page.locator('#reader-title')).toHaveText('Say hello');
 });
@@ -106,7 +112,7 @@ test('dark mode follows the system initially and remembers an explicit choice', 
   await toggle.click();
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await page.getByRole('button', { name: 'Open About me', exact: true }).click();
+  await page.locator('#book-targets button').first().click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.locator('.reader-pages')).toHaveCSS('background-color', 'rgb(37, 46, 39)');
 });
@@ -131,4 +137,32 @@ test('the lamp changes rendered lighting and works independently of the theme', 
   await expect(lamp).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Enter');
   await expect(lamp).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('curtains change the room, retain their state across themes, and support keyboard reversal', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await ready(page);
+  const curtains = page.getByRole('button', { name: 'Window curtains', exact: true });
+  const lamp = page.getByRole('button', { name: 'Desk lamp', exact: true });
+  const canvas = page.locator('.room-canvas');
+  const open = await canvas.screenshot();
+  await curtains.click();
+  await expect(curtains).toHaveAttribute('aria-pressed', 'true');
+  await expect(curtains).toBeEmpty();
+  await expect.poll(async () => (await canvas.screenshot()).equals(open)).toBe(false);
+  await expect(lamp).toHaveAttribute('aria-pressed', 'true');
+  // Click the fabric below the accessible target to exercise the 3D hit test.
+  const target = await curtains.boundingBox();
+  await page.mouse.click(target.x + target.width / 2, target.y + target.height + 4);
+  await expect(curtains).toHaveAttribute('aria-pressed', 'false');
+  await page.mouse.click(target.x + target.width / 2, target.y + target.height + 4);
+  await expect(curtains).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Dark mode', exact: true }).click();
+  await expect(curtains).toHaveAttribute('aria-pressed', 'true');
+  await curtains.focus();
+  await page.keyboard.press('Space');
+  await expect(curtains).toHaveAttribute('aria-pressed', 'false');
+  await page.keyboard.press('Enter');
+  await expect(curtains).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
