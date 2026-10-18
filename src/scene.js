@@ -10,7 +10,7 @@ export function createRoom(container, books, onReady, onFailure) {
   camera.lookAt(0, 2.6, 0);
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -33,14 +33,14 @@ export function createRoom(container, books, onReady, onFailure) {
   let seed = 714;
   const random = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
   const mat = (color, options = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, ...options });
-  const cream = mat('#d8d4bf');
-  const sageWall = mat('#c5c9b4');
+  const cream = mat('#e3dfd2');
+  const sageWall = mat('#bbc5b5');
   const ivory = new THREE.MeshPhysicalMaterial({ color: '#e6dfcd', roughness: .32, clearcoat: .35, clearcoatRoughness: .28 });
   const metal = mat('#364038', { metalness: .35, roughness: .55 });
   const dark = mat('#242e2b', { roughness: .55 });
   const brass = mat('#b19255', { metalness: .6, roughness: .36 });
   const white = mat('#eee7d9');
-  const terracotta = mat('#9d5a3f');
+  const terracotta = mat('#b17c61', { roughness: .78 });
   const canvasTexture = (width, height, draw) => {
     const canvas = document.createElement('canvas');
     canvas.width = width; canvas.height = height;
@@ -51,18 +51,18 @@ export function createRoom(container, books, onReady, onFailure) {
     return texture;
   };
   const woodTexture = canvasTexture(2048, 512, (ctx, w, h) => {
-    ctx.fillStyle = '#ae8051'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#b29a78'; ctx.fillRect(0, 0, w, h);
     for (let i = 0; i < 1400; i++) {
       const y = random() * h;
-      ctx.strokeStyle = `rgba(${random() > .5 ? '62,35,15' : '242,212,164'},${random() * .18})`;
+      ctx.strokeStyle = `rgba(${random() > .5 ? '77,57,37' : '238,221,190'},${random() * .1})`;
       ctx.lineWidth = .3 + random() * 1.6;
       ctx.beginPath(); ctx.moveTo(0, y);
       ctx.bezierCurveTo(w * .3, y + random() * 20, w * .7, y - random() * 20, w, y + random() * 6); ctx.stroke();
     }
   });
   const woodRelief = woodTexture.clone(); woodRelief.colorSpace = THREE.NoColorSpace;
-  const wood = mat('#e0ccb0', { map: woodTexture, bumpMap: woodRelief, bumpScale: .018, roughness: .48 });
-  const darkWood = mat('#9b7556', { map: woodTexture, bumpMap: woodRelief, bumpScale: .012, roughness: .6 });
+  const wood = mat('#eee0c9', { map: woodTexture, bumpMap: woodRelief, bumpScale: .006, roughness: .48 });
+  const darkWood = mat('#9f8061', { map: woodTexture, bumpMap: woodRelief, bumpScale: .006, roughness: .58 });
   // Shared fine-scale relief stays subtle, even on high-density screens.
   const grain = canvasTexture(256, 256, (ctx, w, h) => {
     ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, w, h);
@@ -75,7 +75,7 @@ export function createRoom(container, books, onReady, onFailure) {
   grain.colorSpace = THREE.NoColorSpace;
   grain.wrapS = grain.wrapT = THREE.RepeatWrapping;
   grain.repeat.set(4, 4);
-  for (const material of [cream, sageWall, terracotta]) { material.bumpMap = grain; material.bumpScale = .012; }
+  for (const material of [cream, sageWall, terracotta]) { material.bumpMap = grain; material.bumpScale = .004; }
   const fabric = canvasTexture(512, 512, (ctx, w, h) => {
     ctx.fillStyle = '#aaa08a'; ctx.fillRect(0, 0, w, h);
     for (let i = 0; i < w; i += 4) {
@@ -109,12 +109,33 @@ export function createRoom(container, books, onReady, onFailure) {
     const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, radius, 8, false), material);
     parent.add(mesh); mesh.castShadow = true; return mesh;
   }
+  function turned(profile, material, x, y, z, parent = room) {
+    const geometry = new THREE.LatheGeometry(profile.map(([radius, height]) => new THREE.Vector2(radius, height)), 64);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    parent.add(mesh); return mesh;
+  }
+  const contactTexture = canvasTexture(128, 128, (ctx, w, h) => {
+    const gradient = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    gradient.addColorStop(0, '#30291f70');
+    gradient.addColorStop(.35, '#30291f40');
+    gradient.addColorStop(1, '#30291f00');
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h);
+  });
+  function contactShadow(x, y, z, width, depth, opacity = .35, parent = room) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), new THREE.MeshBasicMaterial({
+      map: contactTexture, transparent: true, opacity, depthWrite: false, toneMapped: false,
+    }));
+    mesh.rotation.x = -Math.PI / 2; mesh.position.set(x, y, z);
+    parent.add(mesh); return mesh;
+  }
   // A cutaway room follows the window / desk / bookshelf arrangement of the supplied reference.
-  box(7.5, .22, 4.65, darkWood, 0, -.12, .2);
+  box(7.5, .22, 4.65, darkWood, 0, -.12, .2, room, .035);
   const floorTexture = woodTexture.clone();
   floorTexture.center.set(.5, .5); floorTexture.rotation = Math.PI / 2;
   const floorRelief = floorTexture.clone(); floorRelief.colorSpace = THREE.NoColorSpace;
-  const floorMaterials = ['#dfc9a8', '#cbb18e', '#d5bb97', '#e4ceb0'].map(color => mat(color, { map: floorTexture, bumpMap: floorRelief, bumpScale: .012, roughness: .57 }));
+  const floorMaterials = ['#e1d5bf', '#d9cbb3', '#ded0b9', '#e5d9c4'].map(color => mat(color, { map: floorTexture, bumpMap: floorRelief, bumpScale: .004, roughness: .62 }));
   for (let i = 0; i < 17; i++) {
     // Offset the end joints, as in a real timber floor.
     let start = -2.1;
@@ -147,7 +168,7 @@ export function createRoom(container, books, onReady, onFailure) {
   box(.055, 3.5, .12, white, -1.96, 3.06, -1.77);
   box(2.65, .12, .44, wood, -1.96, 1.27, -1.68);
   // Two gathered linen panels expand from the sides to meet at the centre.
-  const curtainMaterial = mat('#b3a07d', { side: THREE.DoubleSide, bumpMap: fabric, bumpScale: .012, roughness: 1 });
+  const curtainMaterial = new THREE.MeshPhysicalMaterial({ color: '#d4c8ae', side: THREE.DoubleSide, bumpMap: fabric, bumpScale: .006, roughness: .95, sheen: .35, sheenColor: '#eee4ce', sheenRoughness: .85 });
   const curtainRod = cylinder(.025, .025, 2.94, brass, -1.96, 4.9, -1.46);
   curtainRod.rotation.z = Math.PI / 2;
   for (const x of [-3.46, -.46]) sphere(.045, brass, x, 4.9, -1.46);
@@ -217,9 +238,11 @@ export function createRoom(container, books, onReady, onFailure) {
   }
   function plant(x, y, z, scale = 1, hanging = false) {
     const group = new THREE.Group(); group.position.set(x, y, z); group.scale.setScalar(scale); room.add(group);
-    cylinder(.23, .17, .37, terracotta, 0, .19, 0, group);
-    cylinder(.25, .25, .055, terracotta, 0, .35, 0, group);
-    cylinder(.21, .21, .02, mat('#3d3427'), 0, .375, 0, group);
+    contactShadow(0, .003, 0, .76, .76, .4, group);
+    turned([[0, 0], [.19, 0], [.22, .012], [.225, .026], [.22, .04], [.16, .04], [.165, .06],
+      [.177, .09], [.224, .33], [.24, .345], [.244, .36], [.24, .378], [.225, .382],
+      [.213, .37], [.207, .34], [.16, .095], [0, .095]], terracotta, 0, 0, 0, group);
+    cylinder(.207, .207, .012, mat('#453b2d', { bumpMap: grain, bumpScale: .025 }), 0, .342, 0, group);
     for (let i = 0; i < (hanging ? 8 : 11); i++) {
       const angle = i * 2.4, reach = .22 + random() * .3, height = .3 + random() * .55;
       const end = [Math.cos(angle) * reach, .4 + height, Math.sin(angle) * reach];
@@ -313,12 +336,14 @@ export function createRoom(container, books, onReady, onFailure) {
     const b = box(.83 + i * .07, .12, .65, mat(['#9f704e', '#435f59', '#c1ac83'][i]), 2.12, 4.25 + i * .13, -.77, room, .012); b.rotation.y = i % 2 ? -.06 : .04;
     box(.73 + i * .07, .065, .02, white, 2.12, 4.25 + i * .13, -.435);
   }
-  cylinder(.15, .18, .39, ivory, 1.27, 4.39, -.83);
-  const vaseTop = sphere(.17, ivory, 1.27, 4.59, -.83); vaseTop.scale.y = 1.15;
-  cylinder(.07, .1, .23, ivory, 1.27, 4.78, -.83);
+  turned([[0, 0], [.13, 0], [.16, .025], [.185, .09], [.2, .22], [.187, .34],
+    [.15, .43], [.09, .49], [.075, .54], [.075, .65], [.07, .665], [.055, .665],
+    [.052, .64], [.052, .55]], ivory, 1.27, 4.195, -.83);
+  cylinder(.052, .052, .008, mat('#786f5f'), 1.27, 4.72, -.83);
   // Desk and drawers, following the reference's timber desktop and dark cabinetry.
   box(3.55, .14, 1.68, wood, -1.78, 1.66, .67, room, .045);
   for (const x of [-3.12, -.47]) {
+    contactShadow(x, .034, .7, 1.05, 1.7, .45);
     box(.7, 1.5, 1.33, dark, x, .8, .7, room, .025);
     for (let i = 0; i < 3; i++) {
       box(.64, .44, .04, mat('#414941'), x, .37 + i * .46, 1.38, room, .012);
@@ -339,13 +364,30 @@ export function createRoom(container, books, onReady, onFailure) {
   });
   box(1.83, 1.12, .1, dark, -1.76, 2.5, .11, room, .035);
   box(1.69, .96, .014, new THREE.MeshBasicMaterial({ map: screenTex }), -1.76, 2.52, .17);
+  // Cool light from the display falls across the keyboard and desktop.
+  // Place the emitter just in front of the glass so the monitor cannot block it.
+  const monitorLight = new THREE.SpotLight('#b8e7df', .35, 4, Math.PI * .43, 1, 2);
+  monitorLight.position.set(-1.76, 2.52, .205);
+  monitorLight.target.position.set(-1.76, 1.74, 1.15);
+  monitorLight.castShadow = true;
+  monitorLight.shadow.mapSize.set(1024, 1024);
+  monitorLight.shadow.camera.near = .04;
+  monitorLight.shadow.camera.far = 4;
+  monitorLight.shadow.bias = -.0001;
+  monitorLight.shadow.normalBias = .008;
+  monitorLight.shadow.radius = 2;
+  scene.add(monitorLight, monitorLight.target);
   box(.09, .3, .09, metal, -1.76, 1.92, .11);
   box(.65, .04, .36, metal, -1.76, 1.76, .18, room, .02);
   box(2.03, .018, .66, mat('#41483f'), -1.68, 1.743, .96, room, .06);
   box(1.14, .045, .36, dark, -1.88, 1.78, .95, room, .02);
+  const keycap = mat('#b6beb0', { roughness: .62 });
+  const accentKeycap = mat('#738d7b', { roughness: .62 });
   for (let row = 0; row < 4; row++) for (let col = 0; col < 13; col++) {
-    box(.069, .018, .057, mat((row + col) % 7 === 0 ? '#a9b5a0' : '#65766b'), -2.39 + col * .082, 1.815, .82 + row * .079, room, .007);
+    if (row === 3 && col > 2 && col < 9) continue;
+    box(.069, .018, .057, col === 0 || col === 12 ? accentKeycap : keycap, -2.39 + col * .082, 1.815, .82 + row * .079, room, .007);
   }
+  box(.48, .018, .057, keycap, -1.939, 1.815, 1.057, room, .007);
   const mouse = sphere(.13, dark, -.94, 1.79, .98); mouse.scale.set(.6, .34, 1);
   plant(-.4, 1.74, .04, .54);
   plant(-3.15, 1.74, .13, .55, true);
@@ -382,6 +424,7 @@ export function createRoom(container, books, onReady, onFailure) {
   lamp.shadow.camera.far = 6.5;
   lamp.shadow.bias = -.0001;
   lamp.shadow.normalBias = .012;
+  lamp.shadow.radius = 2;
   scene.add(lamp, lamp.target);
   const glowTexture = canvasTexture(64, 64, (ctx) => {
     const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -419,8 +462,10 @@ export function createRoom(container, books, onReady, onFailure) {
   }
   updateLamp(0);
   // Mug, notebook, and pencil.
-  cylinder(.105, .09, .2, ivory, -2.77, 1.85, 1.2);
-  cylinder(.085, .085, .005, mat('#4a3426'), -2.77, 1.955, 1.2);
+  cylinder(.14, .14, .009, darkWood, -2.77, 1.738, 1.2);
+  turned([[0, 0], [.075, 0], [.09, .012], [.098, .04], [.105, .18], [.102, .202],
+    [.095, .208], [.087, .202], [.085, .18], [.077, .035], [0, .035]], ivory, -2.77, 1.747, 1.2);
+  cylinder(.085, .085, .005, mat('#4a3426'), -2.77, 1.935, 1.2);
   const handle = new THREE.Mesh(new THREE.TorusGeometry(.07, .017, 16, 40), ivory); handle.position.set(-2.66, 1.85, 1.2); handle.castShadow = true; room.add(handle);
   const mugRim = new THREE.Mesh(new THREE.TorusGeometry(.096, .009, 12, 48), ivory);
   mugRim.rotation.x = Math.PI / 2; mugRim.position.set(-2.77, 1.952, 1.2); room.add(mugRim);
@@ -445,21 +490,35 @@ export function createRoom(container, books, onReady, onFailure) {
   for (let i = 0; i < 44; i++) for (const z of [.97, 2.43]) {
     box(.013, .012, .12, rugThread, -1.82 + i * .066, .055, z, room, .004);
   }
-  // Desk stool keeps the bookshelf fully visible.
-  cylinder(.4, .4, .1, mat('#646d55', { bumpMap: fabric, bumpScale: .018 }), -1.6, .96, 2.1);
+  // A softly crowned upholstered seat and splayed legs keep the silhouette light.
+  const upholstery = new THREE.MeshPhysicalMaterial({ color: '#89947a', bumpMap: fabric, bumpScale: .009,
+    roughness: .94, sheen: .45, sheenColor: '#bdc4a3', sheenRoughness: .9 });
+  contactShadow(-1.6, .073, 2.1, 1.2, .95, .45);
+  turned([[0, 0], [.33, 0], [.38, .02], [.405, .05], [.41, .085], [.395, .125], [.36, .15], [0, .165]],
+    upholstery, -1.6, .89, 2.1);
+  cylinder(.34, .36, .055, darkWood, -1.6, .89, 2.1);
   const seatSeam = new THREE.Mesh(new THREE.TorusGeometry(.39, .008, 8, 64), mat('#8a9174'));
-  seatSeam.rotation.x = Math.PI / 2; seatSeam.position.set(-1.6, 1.008, 2.1); room.add(seatSeam);
-  for (const [dx, dz] of [[-.23, -.23], [.23, -.23], [-.23, .23], [.23, .23]]) cylinder(.035, .045, .88, darkWood, -1.6 + dx, .49, 2.1 + dz);
+  seatSeam.rotation.x = Math.PI / 2; seatSeam.position.set(-1.6, 1.015, 2.1); room.add(seatSeam);
+  for (const [dx, dz] of [[-.23, -.23], [.23, -.23], [-.23, .23], [.23, .23]]) {
+    const foot = new THREE.Vector3(-1.6 + dx * 1.28, .08, 2.1 + dz * 1.28);
+    const top = new THREE.Vector3(-1.6 + dx, .89, 2.1 + dz);
+    const center = foot.clone().add(top).multiplyScalar(.5);
+    const leg = cylinder(.043, .03, foot.distanceTo(top), darkWood, center.x, center.y, center.z);
+    leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.sub(foot).normalize());
+  }
+  const footrest = new THREE.Mesh(new THREE.TorusGeometry(.34, .018, 10, 48), metal);
+  footrest.rotation.x = Math.PI / 2; footrest.position.set(-1.6, .34, 2.1); footrest.castShadow = true; room.add(footrest);
   // Soft studio illumination and late-afternoon sunlight.
   const ambient = new THREE.AmbientLight('#fff2d4', .5); scene.add(ambient);
   const hemisphere = new THREE.HemisphereLight('#f5f0d8', '#8b8872', 1.25); scene.add(hemisphere);
   const sunlight = new THREE.DirectionalLight('#ffe7bd', 2.6);
   sunlight.position.set(-3, 8, 5); sunlight.castShadow = true;
   sunlight.target.position.set(0, 2, 0);
-  const shadowSize = Math.min(renderer.capabilities.maxTextureSize, window.innerWidth <= 760 ? 2048 : 4096);
+  const shadowSize = Math.min(renderer.capabilities.maxTextureSize, 2048);
   sunlight.shadow.mapSize.set(shadowSize, shadowSize);
   Object.assign(sunlight.shadow.camera, { left: -5.8, right: 5.8, top: 5.4, bottom: -5, near: .5, far: 20 });
   sunlight.shadow.normalBias = .018; sunlight.shadow.bias = -.00008;
+  sunlight.shadow.radius = 3;
   scene.add(sunlight, sunlight.target);
   const fill = new THREE.DirectionalLight('#edf2df', .85); fill.position.set(5, 4, 3); scene.add(fill);
   function updateDaylight() {
@@ -471,6 +530,9 @@ export function createRoom(container, books, onReady, onFailure) {
     sunlight.intensity = (night ? .45 : 2.6) * (.06 + .94 * opening);
     fill.intensity = (night ? .3 : .85) * (.3 + .7 * opening);
     sunPatch.opacity = night ? 0 : .15 * opening * opening;
+    // The screen's spill becomes more apparent as daylight fades, independently of the lamp.
+    const daylight = (night ? .16 : 1) * (.12 + .88 * opening);
+    monitorLight.intensity = .35 + 5 * (1 - daylight);
   }
   function updateCurtains(delta) {
     if (curtainLevel === curtainTarget) return;
@@ -480,8 +542,8 @@ export function createRoom(container, books, onReady, onFailure) {
     positionCurtains();
     updateDaylight();
   }
-  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.ShadowMaterial({ opacity: .11 }));
-  shadow.rotation.x = -Math.PI / 2; shadow.position.y = -.245; shadow.receiveShadow = true; scene.add(shadow);
+  // A feathered grounding shadow avoids projecting the cutaway walls across the page.
+  contactShadow(0, -.245, .25, 11.5, 7.5, .45, scene);
 
   let activeBook = null, frameId, previousFrameTime = 0;
   const hits = document.getElementById('book-targets');
