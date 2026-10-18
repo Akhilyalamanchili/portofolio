@@ -196,3 +196,7 @@ h1 em { font-weight: 400; color: #78825c; }
   .theme-toggle { padding: 0 10px; font-size: 10px; }
 }
 @media (max-width: 430px) { .header-actions .edition { display: none; } }
+
+/* Preserve paragraphs written in the book editor. */
+.content-lead, .content-section p, .content-detail, .sample-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+.reader-cover h2, .content-heading, .content-section h4, .content-tags span { overflow-wrap: anywhere; }

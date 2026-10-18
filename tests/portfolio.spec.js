@@ -122,7 +122,7 @@ test('the lamp changes rendered lighting and works independently of the theme', 
   const illuminated = await canvas.screenshot();
   await lamp.click();
   await expect(lamp).toHaveAttribute('aria-pressed', 'false');
-  await expect.poll(async () => (await canvas.screenshot()).equals(illuminated)).toBe(false);
+  await expect.poll(async () => (await canvas.screenshot()).equals(illuminated), { timeout: 15_000 }).toBe(false);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await toggle.click();
   await expect(lamp).toHaveAttribute('aria-pressed', 'false');

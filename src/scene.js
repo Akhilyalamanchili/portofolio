@@ -1,18 +1,28 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 export function createRoom(container, books, onReady, onFailure) {
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-5, 5, 4, -4, .1, 100);
   camera.position.set(8, 6.6, 13);
   camera.lookAt(0, 2.6, 0);
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.05;
+  // A locally generated studio environment gives metal and glaze real reflections.
+  const environment = new RoomEnvironment();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const environmentTarget = pmrem.fromScene(environment, .04);
+  scene.environment = environmentTarget.texture;
+  scene.environmentIntensity = .28;
+  environment.dispose();
+  pmrem.dispose();
   renderer.domElement.setAttribute('aria-hidden', 'true');
   renderer.domElement.className = 'room-canvas';
   container.prepend(renderer.domElement);
@@ -24,7 +34,7 @@ export function createRoom(container, books, onReady, onFailure) {
   const mat = (color, options = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, ...options });
   const cream = mat('#d8d4bf');
   const sageWall = mat('#c5c9b4');
-  const ivory = mat('#e6dfcd');
+  const ivory = new THREE.MeshPhysicalMaterial({ color: '#e6dfcd', roughness: .32, clearcoat: .35, clearcoatRoughness: .28 });
   const metal = mat('#364038', { metalness: .35, roughness: .55 });
   const dark = mat('#242e2b', { roughness: .55 });
   const brass = mat('#b19255', { metalness: .6, roughness: .36 });
@@ -39,46 +49,88 @@ export function createRoom(container, books, onReady, onFailure) {
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     return texture;
   };
-  const woodTexture = canvasTexture(1024, 256, (ctx, w, h) => {
+  const woodTexture = canvasTexture(2048, 512, (ctx, w, h) => {
     ctx.fillStyle = '#ae8051'; ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 650; i++) {
+    for (let i = 0; i < 1400; i++) {
       const y = random() * h;
       ctx.strokeStyle = `rgba(${random() > .5 ? '62,35,15' : '242,212,164'},${random() * .18})`;
       ctx.lineWidth = .3 + random() * 1.6;
       ctx.beginPath(); ctx.moveTo(0, y);
-      ctx.bezierCurveTo(w * .3, y + random() * 10, w * .7, y - random() * 10, w, y + random() * 3); ctx.stroke();
+      ctx.bezierCurveTo(w * .3, y + random() * 20, w * .7, y - random() * 20, w, y + random() * 6); ctx.stroke();
     }
   });
-  const wood = mat('#c4b49a', { map: woodTexture, roughness: .75 });
-  const darkWood = mat('#8b6141', { map: woodTexture });
+  const woodRelief = woodTexture.clone(); woodRelief.colorSpace = THREE.NoColorSpace;
+  const wood = mat('#e0ccb0', { map: woodTexture, bumpMap: woodRelief, bumpScale: .018, roughness: .48 });
+  const darkWood = mat('#9b7556', { map: woodTexture, bumpMap: woodRelief, bumpScale: .012, roughness: .6 });
+  // Shared fine-scale relief stays subtle, even on high-density screens.
+  const grain = canvasTexture(256, 256, (ctx, w, h) => {
+    ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 18000; i++) {
+      const value = 100 + Math.floor(random() * 56);
+      ctx.fillStyle = `rgb(${value},${value},${value})`;
+      ctx.fillRect(random() * w, random() * h, 1, 1);
+    }
+  });
+  grain.colorSpace = THREE.NoColorSpace;
+  grain.wrapS = grain.wrapT = THREE.RepeatWrapping;
+  grain.repeat.set(4, 4);
+  for (const material of [cream, sageWall, terracotta]) { material.bumpMap = grain; material.bumpScale = .012; }
+  const fabric = canvasTexture(512, 512, (ctx, w, h) => {
+    ctx.fillStyle = '#aaa08a'; ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < w; i += 4) {
+      ctx.fillStyle = i % 8 ? '#c5bba5' : '#8c826e'; ctx.fillRect(i, 0, 1, h);
+      ctx.fillStyle = i % 8 ? '#b9ae98' : '#958b77'; ctx.fillRect(0, i, w, 1);
+    }
+  });
+  fabric.colorSpace = THREE.NoColorSpace;
+  fabric.wrapS = fabric.wrapT = THREE.RepeatWrapping;
+  fabric.repeat.set(3, 2);
+  const geometries = new Map();
   function box(w, h, d, material, x, y, z, parent = room, rounded = 0) {
-    const geometry = rounded ? new RoundedBoxGeometry(w, h, d, 2, rounded) : new THREE.BoxGeometry(w, h, d);
+    if (!rounded && (material === wood || material === darkWood || material === metal)) rounded = Math.min(.012, w / 5, h / 5, d / 5);
+    const key = `${w}/${h}/${d}/${rounded}`;
+    if (!geometries.has(key)) geometries.set(key, rounded ? new RoundedBoxGeometry(w, h, d, 3, rounded) : new THREE.BoxGeometry(w, h, d));
+    const geometry = geometries.get(key);
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true;
     parent.add(mesh); return mesh;
   }
   function cylinder(rt, rb, h, material, x, y, z, parent = room) {
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 24), material);
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 48), material);
     mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; parent.add(mesh); return mesh;
   }
   function sphere(r, material, x, y, z, parent = room) {
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), material);
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 40, 28), material);
     mesh.position.set(x, y, z); mesh.castShadow = true; parent.add(mesh); return mesh;
   }
   function tube(points, radius, material, parent = room) {
     const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
-    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, radius, 6, false), material);
+    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, radius, 8, false), material);
     parent.add(mesh); mesh.castShadow = true; return mesh;
   }
   // A cutaway room follows the window / desk / bookshelf arrangement of the supplied reference.
   box(7.5, .22, 4.65, darkWood, 0, -.12, .2);
-  for (let i = 0; i < 17; i++) box(.43, .035, 4.6, i % 3 ? wood : darkWood, -3.52 + i * .44, .012, .2);
+  const floorTexture = woodTexture.clone();
+  floorTexture.center.set(.5, .5); floorTexture.rotation = Math.PI / 2;
+  const floorRelief = floorTexture.clone(); floorRelief.colorSpace = THREE.NoColorSpace;
+  const floorMaterials = ['#dfc9a8', '#cbb18e', '#d5bb97', '#e4ceb0'].map(color => mat(color, { map: floorTexture, bumpMap: floorRelief, bumpScale: .012, roughness: .57 }));
+  for (let i = 0; i < 17; i++) {
+    // Offset the end joints, as in a real timber floor.
+    let start = -2.1;
+    const firstLength = i % 2 ? .78 : 1.53;
+    for (let j = 0; start < 2.49; j++) {
+      const length = Math.min(j === 0 ? firstLength : 1.53, 2.5 - start);
+      box(.431, .035, length - .012, floorMaterials[(i + j) % 4], -3.52 + i * .44, .012, start + length / 2, room, .005);
+      start += length;
+    }
+  }
   box(7.5, 5.15, .13, cream, 0, 2.55, -2.08);
   box(.13, 5.15, 4.65, sageWall, -3.77, 2.55, .2);
   box(7.4, .14, .08, ivory, 0, .12, -1.96);
   box(.08, .14, 4.5, ivory, -3.67, .12, .2);
   // Tall, luminous window with a softly painted outdoor view.
-  const viewTexture = canvasTexture(512, 768, (ctx, w, h) => {
+  const viewTexture = canvasTexture(1024, 1536, (ctx, w, h) => {
+    ctx.scale(2, 2); w /= 2; h /= 2;
     const sky = ctx.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#bed4c9'); sky.addColorStop(.7, '#f0eed4'); sky.addColorStop(1, '#a7b899');
     ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
     for (let i = 0; i < 75; i++) {
@@ -97,14 +149,31 @@ export function createRoom(container, books, onReady, onFailure) {
   const sunPatch = mat('#f9df9c', { transparent: true, opacity: .15, depthWrite: false });
   for (let i = 0; i < 3; i++) { const patch = box(.6, .005, 1.8, sunPatch, -.8 + i * .65, .04, 1.15); patch.rotation.y = -.4; patch.castShadow = false; }
   // Plant construction: curved stems and individually oriented leaves.
-  const leafMats = ['#3e5935', '#526f3b', '#6b8146', '#354c2e'].map(c => mat(c, { side: THREE.DoubleSide }));
+  const leafTexture = canvasTexture(128, 256, (ctx, w, h) => {
+    const gradient = ctx.createLinearGradient(0, 0, w, 0);
+    gradient.addColorStop(0, '#8c9c6e'); gradient.addColorStop(.48, '#d1d9a7'); gradient.addColorStop(.52, '#a4b37d'); gradient.addColorStop(1, '#6b8259');
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#dfe7b677'; ctx.lineWidth = 1.5;
+    for (let y = 24; y < h; y += 28) {
+      ctx.beginPath(); ctx.moveTo(0, y - 32); ctx.lineTo(w / 2, y); ctx.lineTo(w, y - 32); ctx.stroke();
+    }
+    ctx.fillStyle = '#e1e5b6'; ctx.fillRect(w / 2 - 1, 0, 2, h);
+  });
+  const leafMats = ['#526c3b', '#6c8849', '#809951', '#455f35'].map(c => mat(c, { map: leafTexture, roughness: .48, side: THREE.DoubleSide }));
   const stemMat = mat('#50603a');
-  const leafGeometry = new THREE.SphereGeometry(1, 8, 6);
+  const leafGeometry = new THREE.PlaneGeometry(2, 2, 8, 12);
+  const leafPositions = leafGeometry.attributes.position;
+  for (let i = 0; i < leafPositions.count; i++) {
+    const x = leafPositions.getX(i), y = leafPositions.getY(i);
+    const taper = Math.pow(Math.max(0, Math.sin((y + 1) * Math.PI / 2)), .85);
+    leafPositions.setXYZ(i, x * taper, y, .22 * x * x * taper + .18 * y * y);
+  }
+  leafGeometry.computeVertexNormals();
   function leaf(x, y, z, size, angle, parent) {
     const mesh = new THREE.Mesh(leafGeometry, leafMats[Math.floor(random() * leafMats.length)]);
-    mesh.position.set(x, y, z); mesh.scale.set(size * .48, size, size * .105);
+    mesh.position.set(x, y, z); mesh.scale.set(size * .48, size, size);
     mesh.rotation.set(random() * .8 - .4, random() * Math.PI, angle);
-    mesh.castShadow = true; parent.add(mesh); return mesh;
+    mesh.castShadow = true; mesh.receiveShadow = true; parent.add(mesh); return mesh;
   }
   function plant(x, y, z, scale = 1, hanging = false) {
     const group = new THREE.Group(); group.position.set(x, y, z); group.scale.setScalar(scale); room.add(group);
@@ -146,6 +215,15 @@ export function createRoom(container, books, onReady, onFailure) {
   }
   // Folio labels printed on textured book spines.
   const bookObjects = [];
+  const pageTexture = canvasTexture(256, 1024, (ctx, w, h) => {
+    ctx.fillStyle = '#e7dcc2'; ctx.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 3 + Math.floor(random() * 4)) {
+      ctx.fillStyle = `rgba(100,79,48,${.1 + random() * .16})`;
+      ctx.fillRect(0, y, w, 1);
+    }
+  });
+  const pageEdges = mat('#fff7e4', { map: pageTexture, roughness: .95 });
+  const paper = mat('#e7dcc2', { roughness: .95 });
   books.forEach((book, index) => {
     const row = index < 6 ? 0 : 1, column = index % 6;
     const width = [.43, .47, .39, .49, .4, .44][column];
@@ -155,11 +233,12 @@ export function createRoom(container, books, onReady, onFailure) {
     const base = row === 0 ? 2.84 : 1.55;
     group.position.set(x, base + height / 2, -.67);
     room.add(group);
-    const cover = mat(book.color);
-    box(width - .055, height - .065, .78, mat('#d9ceae'), 0, 0, -.02, group);
+    const cover = mat(book.color, { bumpMap: fabric, bumpScale: .006, roughness: .68 });
+    box(width - .055, height - .065, .78, [pageEdges, pageEdges, paper, paper, pageEdges, pageEdges], 0, 0, -.02, group);
     box(.028, height, .86, cover, -width / 2 + .014, 0, 0, group, .008);
     box(.028, height, .86, cover, width / 2 - .014, 0, 0, group, .008);
-    const tex = canvasTexture(256, 768, (ctx, w, h) => {
+    const tex = canvasTexture(512, 1536, (ctx, w, h) => {
+      ctx.scale(2, 2); w /= 2; h /= 2;
       ctx.fillStyle = book.color; ctx.fillRect(0, 0, w, h);
       for (let j = 0; j < 9000; j++) { ctx.fillStyle = `rgba(255,255,255,${random() * .05})`; ctx.fillRect(random() * w, random() * h, 1, 2); }
       const shade = ctx.createLinearGradient(0, 0, w, 0); shade.addColorStop(0, '#00000035'); shade.addColorStop(.2, '#ffffff09'); shade.addColorStop(.8, '#ffffff00'); shade.addColorStop(1, '#00000035'); ctx.fillStyle = shade; ctx.fillRect(0, 0, w, h);
@@ -169,7 +248,11 @@ export function createRoom(container, books, onReady, onFailure) {
       ctx.save(); ctx.translate(w / 2, 390); ctx.rotate(-Math.PI / 2); ctx.font = 'bold 39px Georgia'; ctx.fillText(book.spine, 0, 13, 480); ctx.restore();
       ctx.font = '34px Georgia'; ctx.fillText('✦', w / 2, 664);
     });
-    const spine = box(width, height, .07, mat('#ffffff', { map: tex }), 0, 0, .42, group, .012);
+    const spineMaterial = mat('#ffffff', { map: tex, bumpMap: fabric, bumpScale: .004, roughness: .62 });
+    const spine = box(width, height, .07, [cover, cover, cover, cover, spineMaterial, cover], 0, 0, .42, group, .018);
+    for (const y of [-height * .42, height * .42]) {
+      box(width * .92, .014, .012, brass, 0, y, .458, group, .004);
+    }
     const ribbon = box(.035, .16, .015, mat('#c7ac76'), width * .24, -height / 2 - .045, .39, group);
     ribbon.rotation.z = -.06;
     bookObjects.push({ group, spine, width, height, baseZ: -.67, baseY: group.position.y, book });
@@ -194,7 +277,8 @@ export function createRoom(container, books, onReady, onFailure) {
     }
   }
   // Monitor with a custom illustrated woodland wallpaper.
-  const screenTex = canvasTexture(1024, 600, (ctx, w, h) => {
+  const screenTex = canvasTexture(1536, 900, (ctx, w, h) => {
+    ctx.scale(1.5, 1.5); w /= 1.5; h /= 1.5;
     const sky = ctx.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#b8cdb6'); sky.addColorStop(1, '#445f53'); ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#eef0d4'; ctx.beginPath(); ctx.arc(w * .7, h * .29, 68, 0, Math.PI * 2); ctx.fill();
     for (let layer = 0; layer < 4; layer++) {
@@ -288,11 +372,14 @@ export function createRoom(container, books, onReady, onFailure) {
   // Mug, notebook, and pencil.
   cylinder(.105, .09, .2, ivory, -2.77, 1.85, 1.2);
   cylinder(.085, .085, .005, mat('#4a3426'), -2.77, 1.955, 1.2);
-  const handle = new THREE.Mesh(new THREE.TorusGeometry(.07, .017, 8, 18), ivory); handle.position.set(-2.66, 1.85, 1.2); room.add(handle);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(.07, .017, 16, 40), ivory); handle.position.set(-2.66, 1.85, 1.2); handle.castShadow = true; room.add(handle);
+  const mugRim = new THREE.Mesh(new THREE.TorusGeometry(.096, .009, 12, 48), ivory);
+  mugRim.rotation.x = Math.PI / 2; mugRim.position.set(-2.77, 1.952, 1.2); room.add(mugRim);
   box(.4, .045, .53, mat('#ab7459'), -.35, 1.77, 1.08, room, .008);
   const pencil = cylinder(.013, .013, .43, brass, -.33, 1.81, 1.08); pencil.rotation.z = Math.PI / 2; pencil.rotation.y = -.4;
   // Framed botanical print on the side wall.
-  const artTexture = canvasTexture(300, 420, (ctx, w, h) => {
+  const artTexture = canvasTexture(900, 1260, (ctx, w, h) => {
+    ctx.scale(3, 3); w /= 3; h /= 3;
     ctx.fillStyle = '#e5dcc0'; ctx.fillRect(0, 0, w, h); ctx.strokeStyle = '#5c6845'; ctx.lineWidth = 4;
     for (let i = 0; i < 3; i++) { const x = 70 + i * 78; ctx.beginPath(); ctx.moveTo(x, 350); ctx.quadraticCurveTo(x - 22, 220, x + 10, 90 + i * 30); ctx.stroke(); for (let j = 0; j < 6; j++) { ctx.fillStyle = ['#657449', '#8e9968', '#475e3c'][i]; ctx.beginPath(); ctx.ellipse(x + (j % 2 ? 15 : -15), 130 + j * 33, 12, 27, j % 2 ? .7 : -.7, 0, Math.PI * 2); ctx.fill(); } }
     ctx.fillStyle = '#80785e'; ctx.font = '12px Georgia'; ctx.textAlign = 'center'; ctx.fillText('F L O R A  /  S T U D Y  N ° 0 1', w / 2, 392);
@@ -302,25 +389,34 @@ export function createRoom(container, books, onReady, onFailure) {
   box(.89, 1.27, .012, mat('#ffffff', { map: artTexture }), 0, 0, .045, frame);
   // Small floor plant and woven rug anchor the open edge of the room.
   plant(2.9, .05, 1.75, 1.25);
-  const rug = box(2.95, .014, 1.38, mat('#c1b393'), -.4, .055, 1.7, room, .08);
-  for (let i = 0; i < 32; i++) box(.025, .006, 1.26, mat('#d3c7ac'), -1.8 + i * .09, .067, 1.7);
+  const rugMaterial = mat('#c1b393', { bumpMap: fabric, bumpScale: .025, roughness: 1 });
+  box(2.95, .025, 1.38, rugMaterial, -.4, .055, 1.7, room, .01);
+  const rugThread = mat('#d3c7ac', { bumpMap: fabric, bumpScale: .015, roughness: 1 });
+  for (let i = 0; i < 32; i++) box(.016, .004, 1.26, rugThread, -1.8 + i * .09, .07, 1.7);
+  for (let i = 0; i < 44; i++) for (const z of [.97, 2.43]) {
+    box(.013, .012, .12, rugThread, -1.82 + i * .066, .055, z, room, .004);
+  }
   // Desk stool keeps the bookshelf fully visible.
-  cylinder(.4, .4, .1, mat('#646d55'), -1.6, .96, 2.1);
+  cylinder(.4, .4, .1, mat('#646d55', { bumpMap: fabric, bumpScale: .018 }), -1.6, .96, 2.1);
+  const seatSeam = new THREE.Mesh(new THREE.TorusGeometry(.39, .008, 8, 64), mat('#8a9174'));
+  seatSeam.rotation.x = Math.PI / 2; seatSeam.position.set(-1.6, 1.008, 2.1); room.add(seatSeam);
   for (const [dx, dz] of [[-.23, -.23], [.23, -.23], [-.23, .23], [.23, .23]]) cylinder(.035, .045, .88, darkWood, -1.6 + dx, .49, 2.1 + dz);
   // Soft studio illumination and late-afternoon sunlight.
-  const ambient = new THREE.AmbientLight('#fff2d4', .8); scene.add(ambient);
-  const hemisphere = new THREE.HemisphereLight('#f5f0d8', '#8b8872', 1.7); scene.add(hemisphere);
+  const ambient = new THREE.AmbientLight('#fff2d4', .5); scene.add(ambient);
+  const hemisphere = new THREE.HemisphereLight('#f5f0d8', '#8b8872', 1.25); scene.add(hemisphere);
   const sunlight = new THREE.DirectionalLight('#ffe7bd', 2.6);
   sunlight.position.set(-3, 8, 5); sunlight.castShadow = true;
-  sunlight.shadow.mapSize.set(2048, 2048);
-  Object.assign(sunlight.shadow.camera, { left: -7, right: 7, top: 8, bottom: -6, near: .1, far: 24 });
-  sunlight.shadow.normalBias = .025; sunlight.shadow.bias = -.0002; sunlight.shadow.radius = 4;
-  scene.add(sunlight);
-  const fill = new THREE.DirectionalLight('#edf2df', 1.2); fill.position.set(5, 4, 3); scene.add(fill);
+  sunlight.target.position.set(0, 2, 0);
+  const shadowSize = Math.min(renderer.capabilities.maxTextureSize, window.innerWidth <= 760 ? 2048 : 4096);
+  sunlight.shadow.mapSize.set(shadowSize, shadowSize);
+  Object.assign(sunlight.shadow.camera, { left: -5.8, right: 5.8, top: 5.4, bottom: -5, near: .5, far: 20 });
+  sunlight.shadow.normalBias = .018; sunlight.shadow.bias = -.00008;
+  scene.add(sunlight, sunlight.target);
+  const fill = new THREE.DirectionalLight('#edf2df', .85); fill.position.set(5, 4, 3); scene.add(fill);
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.ShadowMaterial({ opacity: .11 }));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = -.245; shadow.receiveShadow = true; scene.add(shadow);
 
-  let activeBook = null, frameId, renderUntil = 0, previousFrameTime = 0;
+  let activeBook = null, frameId, previousFrameTime = 0;
   const hits = document.getElementById('book-targets');
   const lampHit = document.getElementById('lamp-toggle');
   const lampBounds = new THREE.Box3().setFromObject(lampGroup);
@@ -349,21 +445,29 @@ export function createRoom(container, books, onReady, onFailure) {
   }
   bookObjects.forEach(o => o.group.userData.baseY = o.baseY);
   function render(time = 0) {
-    const delta = Math.min(Math.max((time - previousFrameTime) / 1000, 0), .05);
+    const delta = Math.min(Math.max((time - previousFrameTime) / 1000, 0), .1);
     previousFrameTime = time;
     updateLamp(delta);
+    let booksMoving = false;
     for (const object of bookObjects) {
       const selected = activeBook === object.book.id;
       const target = object.baseZ + (selected ? .36 : 0);
-      object.group.position.z = reducedMotion.matches ? target : THREE.MathUtils.lerp(object.group.position.z, target, .15);
-      object.group.rotation.x = reducedMotion.matches ? 0 : THREE.MathUtils.lerp(object.group.rotation.x, selected ? -.045 : 0, .15);
+      const tilt = reducedMotion.matches ? 0 : selected ? -.045 : 0;
+      const oldZ = object.group.position.z, oldTilt = object.group.rotation.x;
+      const blend = reducedMotion.matches ? 1 : 1 - Math.exp(-delta / .08);
+      object.group.position.z = THREE.MathUtils.lerp(oldZ, target, blend);
+      object.group.rotation.x = THREE.MathUtils.lerp(oldTilt, tilt, blend);
+      if (Math.abs(object.group.position.z - target) < .0005) object.group.position.z = target;
+      if (Math.abs(object.group.rotation.x - tilt) < .0001) object.group.rotation.x = tilt;
+      if (oldZ !== object.group.position.z || oldTilt !== object.group.rotation.x) renderer.shadowMap.needsUpdate = true;
+      booksMoving ||= object.group.position.z !== target || object.group.rotation.x !== tilt;
     }
     renderer.render(scene, camera);
-    if ((time < renderUntil || lampLevel !== lampTarget) && !document.hidden) frameId = requestAnimationFrame(render);
+    // Static lighting changes reuse shadow maps; stop drawing once motion settles.
+    if ((booksMoving || lampLevel !== lampTarget) && !document.hidden) frameId = requestAnimationFrame(render);
     else frameId = null;
   }
   function requestRender() {
-    renderUntil = performance.now() + 950;
     if (!frameId) {
       previousFrameTime = performance.now();
       frameId = requestAnimationFrame(render);
@@ -371,6 +475,13 @@ export function createRoom(container, books, onReady, onFailure) {
   }
   function resize() {
     const w = container.clientWidth, h = container.clientHeight;
+    if (!w || !h) return;
+    // Supersample standard displays too, with a pixel budget for large screens.
+    const compact = window.innerWidth <= 760;
+    const desiredRatio = Math.min(Math.max(window.devicePixelRatio || 1, 1.5), compact ? 2 : 2.5);
+    const pixelBudget = compact ? 1600000 : 5000000;
+    const ratio = Math.min(desiredRatio, Math.sqrt(pixelBudget / (w * h)), renderer.capabilities.maxTextureSize / Math.max(w, h));
+    renderer.setPixelRatio(ratio);
     const aspect = w / h;
     const verticalSize = Math.max(8.6, 10.8 / aspect);
     camera.left = -verticalSize * aspect / 2; camera.right = verticalSize * aspect / 2;
@@ -392,14 +503,15 @@ export function createRoom(container, books, onReady, onFailure) {
     },
     setTheme(theme) {
       const night = theme === 'dark';
-      ambient.intensity = night ? .32 : .8;
+      scene.environmentIntensity = night ? .1 : .28;
+      ambient.intensity = night ? .22 : .5;
       ambient.color.set(night ? '#b8cbe0' : '#fff2d4');
-      hemisphere.intensity = night ? .65 : 1.7;
+      hemisphere.intensity = night ? .5 : 1.25;
       hemisphere.color.set(night ? '#9aafd0' : '#f5f0d8');
       hemisphere.groundColor.set(night ? '#343d40' : '#8b8872');
       sunlight.intensity = night ? .45 : 2.6;
       sunlight.color.set(night ? '#9eb8e4' : '#ffe7bd');
-      fill.intensity = night ? .38 : 1.2;
+      fill.intensity = night ? .3 : .85;
       fill.color.set(night ? '#b4c9e7' : '#edf2df');
       windowMaterial.color.set(night ? '#415575' : '#ffffff');
       sunPatch.opacity = night ? 0 : .15;

@@ -81,7 +81,7 @@ function openBook(book, button) {
     if (section.detail) sectionElement.append(element('span', section.detail, 'content-detail'));
     content.append(sectionElement);
   }
-  if (book.id === 'projects') {
+  if (book.showReference) {
     const figure = element('figure', '', 'reference-figure');
     const img = document.createElement('img');
     img.src = referenceImage; img.alt = 'The supplied inspiration image: a warm workspace with trailing plants, a window, wooden desk, and bookshelves.';
@@ -91,7 +91,8 @@ function openBook(book, button) {
   }
   const tags = element('div', '', 'content-tags');
   tags.append(...book.tags.map(tag => element('span', tag)));
-  content.append(tags, element('p', 'A chapter in progress. This is temporary portfolio content; personal details and verified links will be added later.', 'sample-note'));
+  content.append(tags);
+  if (book.note) content.append(element('p', book.note, 'sample-note'));
   reader.showModal();
   reader.scrollTop = 0;
   document.querySelector('.reader-pages').scrollTop = 0;
@@ -167,4 +168,8 @@ try {
 } catch (error) {
   console.warn('3D rendering is unavailable; using the accessible bookshelf.', error);
   showFallback();
+}
+
+if (import.meta.hot) {
+  import.meta.hot.on('books-updated', () => window.location.reload());
 }

@@ -30,7 +30,13 @@ The production site is generated in `dist/` and can be served by any static host
 
 ## Personalize
 
-Edit **`src/content.js`** to replace the temporary biography, skills, projects, education, experience, and contact copy. Each entry provides the spine label, cover color, preview, and full chapter content. Personal links and credentials have deliberately not been invented.
+Run `npm run dev`, then open **`http://localhost:5173/admin`** (use the port Vite prints if different). Select a book to edit its name, spine label, color, category, volume, summary, chapter heading, introduction, tags, and closing note. Add, remove, and reorder content sections, including their optional supporting details. The preview updates as you type; **Save all changes** (or Ctrl/Cmd+S) saves drafts across all books.
+
+Changes are written directly to **`src/books.json`**, the shared source for the 3D shelf and reader. Open bookshelf tabs refresh after saving, and the next `npm run build` includes the updated content. Line breaks are preserved, and copy is rendered as plain text. `src/content.js` exports this shared collection. Book identifiers and the twelve shelf positions stay fixed.
+
+The editor warns before leaving with unsaved changes, detects conflicting saves from another tab, and retains the previous save in `.book-editor/books.previous.json`. **Discard book changes** restores only the selected book; **Export draft as JSON** downloads all current drafts for backup. You can also edit `src/books.json` directly.
+
+This is a **local project editor**, available through the development server on localhost. The static production build has no write API or live admin login; rebuild and deploy after editing locally. `/admin` on a static host requires an index fallback and displays the local-editor instructions. Personal links and credentials have deliberately not been invented.
 
 The visible name and introduction are in `index.html`. Room geometry, materials, camera, and lighting are in `src/scene.js`; application interactions are in `src/main.js`; styling is in `src/styles.css`.
 
@@ -43,7 +49,7 @@ npx playwright install chromium
 npm test
 ```
 
-The tests exercise every book, hover previews, keyboard interaction, touch, and the non-WebGL fallback. On this machine the browser download is kept outside the nearly-full system disk:
+The tests exercise every book, hover previews, keyboard interaction, touch, the non-WebGL fallback, and the admin save/edit flow. Admin tests use a temporary project copy so they never overwrite your content. On this machine the browser download is kept outside the system disk:
 
 ```sh
 PLAYWRIGHT_BROWSERS_PATH=/tmp/portfolio-browsers npx playwright install chromium
@@ -55,5 +61,6 @@ The `/tmp` browser installation is temporary and may need reinstalling after a r
 ## Notes
 
 - Font styling uses Google Fonts, with local serif/sans-serif fallbacks if offline.
-- The room renders on demand, with capped pixel density, rather than continuously animating decorative objects.
+- The room renders on demand with antialiasing and supersampling (up to 2.5× on desktop and 2× on mobile), bounded by a 5-megapixel desktop / 1.6-megapixel mobile drawing buffer.
+- Procedural high-resolution textures add wood grain, cloth weave, paper edges, and leaf veins. Beveled furniture, smoother curved geometry, studio reflections, and up to 4096px sunlight shadows improve detail without downloading external 3D assets.
 - See `PROGRESS.md` for implementation status and verification results.
