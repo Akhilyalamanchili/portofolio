@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # A shelf full of stories
 
 Akhil’s interactive 3D bookshelf portfolio. A warm, plant-filled workspace modeled with Three.js from the supplied landing-page reference.
@@ -64,3 +65,7 @@ The `/tmp` browser installation is temporary and may need reinstalling after a r
 - The room renders on demand with antialiasing and supersampling (up to 2.5× on desktop and 2× on mobile), bounded by a 5-megapixel desktop / 1.6-megapixel mobile drawing buffer.
 - Procedural high-resolution textures add wood grain, cloth weave, paper edges, and leaf veins. Beveled furniture, smoother curved geometry, studio reflections, and up to 4096px sunlight shadows improve detail without downloading external 3D assets.
 - See `PROGRESS.md` for implementation status and verification results.
+=======
+# portofolio
+I 3D based protofolio using tree js 
+>>>>>>> b56175706e7032d741ab7fbd71b331c8d5f4eead
