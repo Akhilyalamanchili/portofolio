@@ -11,6 +11,31 @@ const content = document.getElementById('reader-content');
 const closeButton = document.querySelector('.close-reader');
 let scene, activeButton;
 const canHover = window.matchMedia('(hover: hover)');
+const themeToggle = document.getElementById('theme-toggle');
+const lampToggle = document.getElementById('lamp-toggle');
+let theme = document.documentElement.dataset.theme;
+let lampOn = true;
+
+function applyTheme(nextTheme) {
+  theme = nextTheme;
+  document.documentElement.dataset.theme = theme;
+  themeToggle.setAttribute('aria-pressed', String(theme === 'dark'));
+  themeToggle.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  document.getElementById('theme-label').textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+  document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#181e1b' : '#f3efe6';
+  scene?.setTheme(theme);
+}
+applyTheme(theme);
+themeToggle.addEventListener('click', () => {
+  applyTheme(theme === 'dark' ? 'light' : 'dark');
+  try { localStorage.setItem('portfolio-theme', theme); } catch {}
+});
+lampToggle.addEventListener('click', () => {
+  lampOn = !lampOn;
+  scene?.setLamp(lampOn);
+  lampToggle.setAttribute('aria-pressed', String(lampOn));
+  hidePreview();
+});
 
 // Use text nodes for portfolio copy so edits are never interpreted as HTML.
 function element(tag, text, className) {
@@ -125,6 +150,7 @@ document.getElementById('year').textContent = new Date().getFullYear();
 
 function showFallback() {
   scene = undefined;
+  lampToggle.hidden = true;
   room.classList.add('fallback', 'is-ready');
   document.getElementById('room-loading').hidden = true;
   if (!room.querySelector('.fallback-label')) room.append(element('p', 'Your collection, in a lighter view. Select any book to explore.', 'fallback-label'));
@@ -134,7 +160,10 @@ try {
   scene = createRoom(room, books, () => {
     room.classList.add('is-ready');
     document.getElementById('room-loading').hidden = true;
+    lampToggle.hidden = room.classList.contains('fallback');
   }, showFallback);
+  scene.setTheme(theme);
+  scene.setLamp(lampOn);
 } catch (error) {
   console.warn('3D rendering is unavailable; using the accessible bookshelf.', error);
   showFallback();

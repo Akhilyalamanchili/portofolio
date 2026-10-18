@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f3efe6" />
+    <script>
+      (() => {
+        let theme;
+        try { theme = localStorage.getItem('portfolio-theme'); } catch {}
+        document.documentElement.dataset.theme = theme === 'dark' || theme === 'light'
+          ? theme : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      })();
+    </script>
     <meta name="description" content="Step into Akhil's little corner of the internet. An interactive 3D bookshelf of ideas, skills, and things built with care." />
     <title>Akhil — A shelf full of stories</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -13,7 +21,14 @@
       <header class="site-header">
         <div class="wordmark"><span class="monogram" aria-hidden="true">a.</span><span>AKHIL<span class="wordmark-sub">A PERSONAL COLLECTION</span></span></div>
         <div class="header-note"><span class="status-dot"></span> Always a work in progress</div>
-        <span class="edition">VOL. 01 / 2026</span>
+        <div class="header-actions">
+          <span class="edition">VOL. 01 / 2026</span>
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Dark mode" aria-pressed="false">
+            <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M20.5 13.2A8.6 8.6 0 0 1 10.8 3.5a8.6 8.6 0 1 0 9.7 9.7Z"/></svg>
+            <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
+            <span id="theme-label">Dark mode</span>
+          </button>
+        </div>
       </header>
       <main>
         <section class="workspace" aria-labelledby="hero-title">
@@ -27,6 +42,7 @@
           <div id="room" class="room" role="group" aria-label="Interactive 3D workspace. Select a book on the shelves to explore the portfolio.">
             <div class="room-loading" id="room-loading"><span class="loading-book"></span><p>Arranging the bookshelf…</p></div>
             <div id="book-targets" class="book-targets" aria-label="Portfolio books"></div>
+            <button id="lamp-toggle" class="lamp-hit" type="button" aria-label="Desk lamp" aria-pressed="true" hidden></button>
             <div id="book-preview" class="book-preview" role="status" aria-live="polite" hidden></div>
             <div class="scene-caption"><span class="tiny-spark">✳</span> A quiet place for curious things.</div>
           </div>

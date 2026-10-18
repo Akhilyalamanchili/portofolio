@@ -40,6 +40,8 @@ test('hover gives the matching overview and leaves the reading view closed', asy
 test('keyboard readers can open and close a book with focus restored', async ({ page }) => {
   await ready(page);
   await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Dark mode', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Open About me', exact: true })).toBeFocused();
   await expect(page.locator('#book-preview')).toBeVisible();
   await page.keyboard.press('Enter');
@@ -57,6 +59,11 @@ test('mobile supports touch opening, scrolling the full content, and dismissal',
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
   const page = await context.newPage();
   await ready(page);
+  const lamp = page.getByRole('button', { name: 'Desk lamp', exact: true });
+  await lamp.tap();
+  await expect(lamp).toHaveAttribute('aria-pressed', 'false');
+  await lamp.tap();
+  await expect(lamp).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Open Selected work', exact: true }).tap();
   await expect(page.locator('#reader-title')).toHaveText('Selected work');
   await page.locator('.sample-note').scrollIntoViewIfNeeded();
@@ -80,6 +87,48 @@ test('WebGL unavailable still provides all book content', async ({ page }) => {
   });
   await page.goto('/');
   await expect(page.locator('#room')).toHaveClass(/fallback/);
+  await expect(page.getByRole('button', { name: 'Desk lamp', exact: true })).toBeHidden();
   await page.getByRole('button', { name: 'Open Say hello', exact: true }).click();
   await expect(page.locator('#reader-title')).toHaveText('Say hello');
+});
+
+test('dark mode follows the system initially and remembers an explicit choice', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await ready(page);
+  const toggle = page.getByRole('button', { name: 'Dark mode', exact: true });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await toggle.click();
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: 'Open About me', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.locator('.reader-pages')).toHaveCSS('background-color', 'rgb(37, 46, 39)');
+});
+
+test('the lamp changes rendered lighting and works independently of the theme', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await ready(page);
+  const lamp = page.getByRole('button', { name: 'Desk lamp', exact: true });
+  const toggle = page.getByRole('button', { name: 'Dark mode', exact: true });
+  const canvas = page.locator('.room-canvas');
+  await toggle.click();
+  await expect(lamp).toHaveAttribute('aria-pressed', 'true');
+  const illuminated = await canvas.screenshot();
+  await lamp.click();
+  await expect(lamp).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(async () => (await canvas.screenshot()).equals(illuminated)).toBe(false);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await toggle.click();
+  await expect(lamp).toHaveAttribute('aria-pressed', 'false');
+  await lamp.focus();
+  await page.keyboard.press('Space');
+  await expect(lamp).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Enter');
+  await expect(lamp).toHaveAttribute('aria-pressed', 'false');
 });

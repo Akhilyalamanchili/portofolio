@@ -87,7 +87,8 @@ export function createRoom(container, books, onReady, onFailure) {
     }
   });
   box(2.45, 3.65, .13, ivory, -1.96, 3.06, -1.91);
-  box(2.23, 3.43, .02, new THREE.MeshBasicMaterial({ map: viewTexture }), -1.96, 3.06, -1.831);
+  const windowMaterial = new THREE.MeshBasicMaterial({ map: viewTexture });
+  box(2.23, 3.43, .02, windowMaterial, -1.96, 3.06, -1.831);
   for (const x of [-3.14, -.78]) box(.1, 3.6, .17, white, x, 3.06, -1.77);
   for (const y of [1.29, 3.04, 4.83]) box(2.46, .09, .17, white, -1.96, y, -1.77);
   box(.055, 3.5, .12, white, -1.96, 3.06, -1.77);
@@ -216,11 +217,74 @@ export function createRoom(container, books, onReady, onFailure) {
   plant(-.4, 1.74, .04, .54);
   plant(-3.15, 1.74, .13, .55, true);
   // Warm articulated desk lamp.
-  cylinder(.19, .2, .04, metal, -2.98, 1.75, .91);
-  tube([[-2.98, 1.78, .91], [-3.05, 2.3, .91], [-2.77, 2.69, .75], [-2.58, 2.65, .7]], .026, brass);
-  const shade = cylinder(.08, .23, .23, mat('#c6a165', { metalness: .55, roughness: .4 }), -2.58, 2.57, .7); shade.rotation.z = .18;
-  sphere(.085, mat('#ffe7ad', { emissive: '#ffd287', emissiveIntensity: 3 }), -2.56, 2.46, .7);
-  const lamp = new THREE.PointLight('#ffce87', 5, 3, 2); lamp.position.set(-2.55, 2.4, .7); scene.add(lamp);
+  const lampGroup = new THREE.Group(); room.add(lampGroup);
+  cylinder(.19, .2, .04, metal, -2.98, 1.75, .91, lampGroup);
+  tube([[-2.98, 1.78, .91], [-3.05, 2.3, .91], [-2.77, 2.69, .75], [-2.58, 2.65, .7]], .026, brass, lampGroup);
+  const lampHead = new THREE.Group();
+  lampHead.position.set(-2.58, 2.57, .7);
+  const beamDirection = new THREE.Vector3(.35, -1, .18).normalize();
+  lampHead.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), beamDirection);
+  lampGroup.add(lampHead);
+  // An open shade lets the light leave through the aperture instead of a solid cap.
+  const shadeGeometry = new THREE.CylinderGeometry(.08, .23, .23, 32, 1, true);
+  const shade = new THREE.Mesh(shadeGeometry, mat('#c6a165', { metalness: .65, roughness: .3, side: THREE.DoubleSide }));
+  shade.castShadow = true; shade.receiveShadow = true; lampHead.add(shade);
+  const shadeLining = new THREE.Mesh(
+    new THREE.CylinderGeometry(.074, .224, .225, 32, 1, true),
+    mat('#eadcb7', { side: THREE.BackSide, roughness: .6, emissive: '#ffcf84', emissiveIntensity: .45 }),
+  );
+  shadeLining.receiveShadow = true; lampHead.add(shadeLining);
+  const bulbMaterial = mat('#ffe7ad', { emissive: '#ffd287', emissiveIntensity: 4 });
+  const bulb = sphere(.065, bulbMaterial, 0, -.09, 0, lampHead);
+  // The emitting bulb must not shadow its own light.
+  bulb.castShadow = false;
+  lampHead.updateWorldMatrix(true, false);
+  const aperture = lampHead.localToWorld(new THREE.Vector3(0, -.155, 0));
+  const lamp = new THREE.SpotLight('#ffd49b', 9, 6.5, Math.PI * .31, .85, 2);
+  lamp.position.copy(aperture);
+  lamp.target.position.copy(aperture).add(beamDirection);
+  lamp.castShadow = true;
+  lamp.shadow.mapSize.set(1024, 1024);
+  lamp.shadow.camera.near = .04;
+  lamp.shadow.camera.far = 6.5;
+  lamp.shadow.bias = -.0001;
+  lamp.shadow.normalBias = .012;
+  scene.add(lamp, lamp.target);
+  const glowTexture = canvasTexture(64, 64, (ctx) => {
+    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gradient.addColorStop(0, '#ffe3a570'); gradient.addColorStop(.25, '#ffd28a28'); gradient.addColorStop(1, '#ffd28a00');
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, 64, 64);
+  });
+  const lampGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  lampGlow.position.copy(aperture); lampGlow.scale.set(.5, .5, 1); room.add(lampGlow);
+  const warmLight = new THREE.Color('#ffd49b'), coolingLight = new THREE.Color('#ff9e46');
+  const unlitBulb = new THREE.Color('#b9b3a4'), litBulb = new THREE.Color('#ffe7ad');
+  // A small thermal lag models a filament warming and cooling, without flicker.
+  let lampLevel = 1, lampTarget = 1;
+  const viewToLamp = camera.position.clone().sub(aperture).normalize();
+  const glowVisibility = THREE.MathUtils.smoothstep(viewToLamp.dot(beamDirection), -.25, .5);
+  function updateLamp(delta) {
+    if (reducedMotion.matches) lampLevel = lampTarget;
+    else {
+      const responseTime = lampTarget > lampLevel ? .075 : .11;
+      lampLevel = THREE.MathUtils.lerp(lampTarget, lampLevel, Math.exp(-delta / responseTime));
+      if (Math.abs(lampLevel - lampTarget) < .001) lampLevel = lampTarget;
+    }
+    // Inverse-square distance decay and a feathered cone are handled by SpotLight.
+    const power = lampLevel * lampLevel;
+    lamp.intensity = 9 * power;
+    lamp.color.copy(coolingLight).lerp(warmLight, lampLevel);
+    bulbMaterial.emissive.copy(lamp.color);
+    bulbMaterial.emissiveIntensity = 4 * power;
+    shadeLining.material.emissiveIntensity = .45 * power;
+    bulbMaterial.color.copy(unlitBulb).lerp(litBulb, lampLevel);
+    lampGlow.material.color.copy(lamp.color);
+    lampGlow.material.opacity = power * glowVisibility;
+    lampGlow.scale.setScalar(.3 + .2 * lampLevel);
+    lampGlow.visible = lampLevel > 0;
+    // Keep the shadow-casting light in the shader as it fades, avoiding recompilation.
+  }
+  updateLamp(0);
   // Mug, notebook, and pencil.
   cylinder(.105, .09, .2, ivory, -2.77, 1.85, 1.2);
   cylinder(.085, .085, .005, mat('#4a3426'), -2.77, 1.955, 1.2);
@@ -244,8 +308,8 @@ export function createRoom(container, books, onReady, onFailure) {
   cylinder(.4, .4, .1, mat('#646d55'), -1.6, .96, 2.1);
   for (const [dx, dz] of [[-.23, -.23], [.23, -.23], [-.23, .23], [.23, .23]]) cylinder(.035, .045, .88, darkWood, -1.6 + dx, .49, 2.1 + dz);
   // Soft studio illumination and late-afternoon sunlight.
-  scene.add(new THREE.AmbientLight('#fff2d4', .8));
-  scene.add(new THREE.HemisphereLight('#f5f0d8', '#8b8872', 1.7));
+  const ambient = new THREE.AmbientLight('#fff2d4', .8); scene.add(ambient);
+  const hemisphere = new THREE.HemisphereLight('#f5f0d8', '#8b8872', 1.7); scene.add(hemisphere);
   const sunlight = new THREE.DirectionalLight('#ffe7bd', 2.6);
   sunlight.position.set(-3, 8, 5); sunlight.castShadow = true;
   sunlight.shadow.mapSize.set(2048, 2048);
@@ -256,8 +320,10 @@ export function createRoom(container, books, onReady, onFailure) {
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.ShadowMaterial({ opacity: .11 }));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = -.245; shadow.receiveShadow = true; scene.add(shadow);
 
-  let activeBook = null, frameId, renderUntil = 0;
+  let activeBook = null, frameId, renderUntil = 0, previousFrameTime = 0;
   const hits = document.getElementById('book-targets');
+  const lampHit = document.getElementById('lamp-toggle');
+  const lampBounds = new THREE.Box3().setFromObject(lampGroup);
   function projectTargets() {
     const w = container.clientWidth, h = container.clientHeight;
     bookObjects.forEach(({ group, width, height, book }) => {
@@ -269,9 +335,23 @@ export function createRoom(container, books, onReady, onFailure) {
       const button = hits.querySelector(`[data-book="${book.id}"]`);
       if (button) { Object.assign(button.style, { left: `${minX - 1}px`, top: `${minY - 1}px`, width: `${maxX - minX + 2}px`, height: `${maxY - minY + 2}px` }); }
     });
+    const corners = [];
+    for (const x of [lampBounds.min.x, lampBounds.max.x])
+      for (const y of [lampBounds.min.y, lampBounds.max.y])
+        for (const z of [lampBounds.min.z, lampBounds.max.z]) {
+          const p = new THREE.Vector3(x, y, z).project(camera);
+          corners.push({ x: (p.x + 1) * w / 2, y: (1 - p.y) * h / 2 });
+        }
+    const left = Math.min(...corners.map(p => p.x)), right = Math.max(...corners.map(p => p.x));
+    const top = Math.min(...corners.map(p => p.y)), bottom = Math.max(...corners.map(p => p.y));
+    const hitWidth = Math.max(44, right - left + 12), hitHeight = Math.max(44, bottom - top + 12);
+    Object.assign(lampHit.style, { left: `${(left + right - hitWidth) / 2}px`, top: `${(top + bottom - hitHeight) / 2}px`, width: `${hitWidth}px`, height: `${hitHeight}px` });
   }
   bookObjects.forEach(o => o.group.userData.baseY = o.baseY);
   function render(time = 0) {
+    const delta = Math.min(Math.max((time - previousFrameTime) / 1000, 0), .05);
+    previousFrameTime = time;
+    updateLamp(delta);
     for (const object of bookObjects) {
       const selected = activeBook === object.book.id;
       const target = object.baseZ + (selected ? .36 : 0);
@@ -279,17 +359,23 @@ export function createRoom(container, books, onReady, onFailure) {
       object.group.rotation.x = reducedMotion.matches ? 0 : THREE.MathUtils.lerp(object.group.rotation.x, selected ? -.045 : 0, .15);
     }
     renderer.render(scene, camera);
-    if (time < renderUntil && !document.hidden) frameId = requestAnimationFrame(render);
+    if ((time < renderUntil || lampLevel !== lampTarget) && !document.hidden) frameId = requestAnimationFrame(render);
     else frameId = null;
   }
-  function requestRender() { renderUntil = performance.now() + 950; if (!frameId) frameId = requestAnimationFrame(render); }
+  function requestRender() {
+    renderUntil = performance.now() + 950;
+    if (!frameId) {
+      previousFrameTime = performance.now();
+      frameId = requestAnimationFrame(render);
+    }
+  }
   function resize() {
     const w = container.clientWidth, h = container.clientHeight;
     const aspect = w / h;
     const verticalSize = Math.max(8.6, 10.8 / aspect);
     camera.left = -verticalSize * aspect / 2; camera.right = verticalSize * aspect / 2;
     camera.top = verticalSize / 2; camera.bottom = -verticalSize / 2;
-    camera.updateProjectionMatrix(); renderer.setSize(w, h);
+    camera.updateProjectionMatrix(); camera.updateMatrixWorld(); renderer.setSize(w, h);
     projectTargets(); requestRender();
   }
   const observer = new ResizeObserver(resize); observer.observe(container);
@@ -297,5 +383,28 @@ export function createRoom(container, books, onReady, onFailure) {
   renderer.domElement.addEventListener('webglcontextlost', event => { event.preventDefault(); cancelAnimationFrame(frameId); onFailure(); });
   resize();
   requestAnimationFrame(() => { onReady(); projectTargets(); });
-  return { hover(id) { activeBook = id; requestRender(); }, resize, renderer, scene };
+  return {
+    hover(id) { activeBook = id; requestRender(); },
+    setLamp(on) {
+      lampTarget = on ? 1 : 0;
+      if (reducedMotion.matches) updateLamp(0);
+      requestRender();
+    },
+    setTheme(theme) {
+      const night = theme === 'dark';
+      ambient.intensity = night ? .32 : .8;
+      ambient.color.set(night ? '#b8cbe0' : '#fff2d4');
+      hemisphere.intensity = night ? .65 : 1.7;
+      hemisphere.color.set(night ? '#9aafd0' : '#f5f0d8');
+      hemisphere.groundColor.set(night ? '#343d40' : '#8b8872');
+      sunlight.intensity = night ? .45 : 2.6;
+      sunlight.color.set(night ? '#9eb8e4' : '#ffe7bd');
+      fill.intensity = night ? .38 : 1.2;
+      fill.color.set(night ? '#b4c9e7' : '#edf2df');
+      windowMaterial.color.set(night ? '#415575' : '#ffffff');
+      sunPatch.opacity = night ? 0 : .15;
+      requestRender();
+    },
+    resize, renderer, scene,
+  };
 }

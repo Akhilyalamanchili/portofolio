@@ -23,6 +23,8 @@ The production site is generated in `dist/` and can be served by any static host
 - Hover over a book to pull it slightly out of the shelf and see an overview.
 - Click or tap a book to open its complete chapter.
 - Use Tab and Enter for keyboard access; Escape or the close button returns to the shelf.
+- Use the header toggle to switch between light and dark mode. Your choice is remembered; the first visit follows your system preference.
+- Click or tap the desk lamp to turn its bulb and warm light on or off, independently of the page theme. The lamp also works with Tab and Enter/Space.
 - The window, desk, plants, and other room objects are decorative.
 - Reduced-motion preferences are respected. A lightweight bookshelf appears if WebGL is unavailable.
 

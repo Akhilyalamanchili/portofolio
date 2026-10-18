@@ -126,3 +126,73 @@ h1 em { font-weight: 400; color: #78825c; }
 }
 @media (hover: none) { .desktop-instructions { display: none; } .touch-instructions { display: block; } }
 @media (prefers-reduced-motion: reduce) { *, *:before, *:after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* Room controls */
+.header-actions { display: flex; align-items: center; gap: 20px; }
+.theme-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 13px; border: 1px solid var(--line); border-radius: 24px; background: transparent; color: var(--ink); font-size: 11px; cursor: pointer; transition: background .2s, border-color .2s; }
+.theme-toggle:hover { background: #81906d16; border-color: #81906d; }
+.theme-toggle svg { width: 17px; height: 17px; flex-shrink: 0; }
+.theme-toggle .sun-icon { display: none; }
+.lamp-hit { position: absolute; padding: 0; border: 1px solid transparent; border-radius: 12px; background: transparent; cursor: pointer; touch-action: manipulation; }
+.lamp-hit:focus-visible { border-color: #c4a26880; }
+.room.fallback .lamp-hit { display: none; }
+
+/* Evening palette keeps the same room and page layout. */
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; --ink: #e6e8db; --muted: #adb6a4; --line: #3d493f; --paper: #181e1b; color: var(--ink); background: var(--paper); }
+[data-theme='dark'] ::selection { background: #52674a; color: #fff7e6; }
+[data-theme='dark'] .theme-toggle .moon-icon { display: none; }
+[data-theme='dark'] .theme-toggle .sun-icon { display: block; }
+[data-theme='dark'] .monogram { background: #a6b68d; color: #202b22; }
+[data-theme='dark'] .wordmark-sub,
+[data-theme='dark'] .header-note,
+[data-theme='dark'] .edition,
+[data-theme='dark'] .eyebrow,
+[data-theme='dark'] .intro-detail,
+[data-theme='dark'] .explore-note,
+[data-theme='dark'] .scene-caption,
+[data-theme='dark'] .shelf-guide p,
+[data-theme='dark'] .guide-count,
+[data-theme='dark'] .site-footer,
+[data-theme='dark'] .footer-middle,
+[data-theme='dark'] .collection-label,
+[data-theme='dark'] .collection-label span,
+[data-theme='dark'] .room-loading,
+[data-theme='dark'] .fallback-label { color: #adb6a4; }
+[data-theme='dark'] h1 em { color: #b2c395; }
+[data-theme='dark'] .intro-copy,
+[data-theme='dark'] .shelf-guide strong { color: #c8d0bd; }
+[data-theme='dark'] .guide-icon { color: #b2c395; border-color: var(--line); }
+[data-theme='dark'] .site-footer { border-color: var(--line); }
+[data-theme='dark'] .room:before { background: radial-gradient(ellipse, #56695222, transparent 70%); }
+[data-theme='dark'] .book-preview { background: #252e27f5; border-color: var(--line); border-left-color: var(--book-color); box-shadow: 0 14px 35px #0004; }
+[data-theme='dark'] .book-preview h2 { color: #e6e8db; }
+[data-theme='dark'] .preview-meta,
+[data-theme='dark'] .book-preview p,
+[data-theme='dark'] .preview-action { color: #b6c0ab; }
+[data-theme='dark'] .preview-action { border-color: var(--line); }
+[data-theme='dark'] .reader { background: #252e27; box-shadow: 0 30px 120px #0009; }
+[data-theme='dark'] .reader::backdrop { background: #0a100bcc; }
+[data-theme='dark'] .reader-pages { background: linear-gradient(90deg, #121a1766, transparent 5%), #252e27; scrollbar-color: #64715d transparent; }
+[data-theme='dark'] .close-reader { background: #394638; color: #e6e8db; }
+[data-theme='dark'] .close-reader:hover { background: #4b5b43; }
+[data-theme='dark'] .content-lead,
+[data-theme='dark'] .content-section p { color: #bdc6b3; }
+[data-theme='dark'] .content-section h4 { color: #dde4d2; }
+[data-theme='dark'] .content-detail,
+[data-theme='dark'] .sample-note,
+[data-theme='dark'] .page-top,
+[data-theme='dark'] .page-bottom,
+[data-theme='dark'] .reference-figure figcaption { color: #aab59e; }
+[data-theme='dark'] .page-top,
+[data-theme='dark'] .page-bottom,
+[data-theme='dark'] .content-section,
+[data-theme='dark'] .sample-note { border-color: var(--line); }
+[data-theme='dark'] .content-tags span { background: #313e30; color: #c5d2b6; border-color: #46533d; }
+[data-theme='dark'] .mobile-book { box-shadow: inset 3px 0 2px #ffffff22, inset -2px 0 3px #0002, 2px 4px 0 #101710; }
+[data-theme='dark'] .room.fallback { background: #333f32; border-color: #735b40; }
+@media (max-width: 760px) {
+  .header-actions { gap: 10px; }
+  .theme-toggle { padding: 0 10px; font-size: 10px; }
+}
+@media (max-width: 430px) { .header-actions .edition { display: none; } }
