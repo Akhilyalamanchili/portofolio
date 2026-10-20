@@ -1,0 +1,20 @@
+.book-reading { min-width: 0; --page-paper: #f9f6ec; --page-ink: #394c3c; --page-line: #daddcf; }
+.book-navigation { position: sticky; top: 0; z-index: 2; background: var(--page-paper); padding: 14px 0; margin-bottom: 23px; border-bottom: 1px solid var(--page-line); }
+.book-page-controls { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.book-page-controls button { font: 11px 'DM Sans', sans-serif; border: 1px solid var(--page-line); background: transparent; color: var(--page-ink); padding: 10px 12px; border-radius: 6px; cursor: pointer; min-height: 38px; }
+.book-page-controls button:hover:not(:disabled) { background: #82956a19; }
+.book-page-controls button:disabled { opacity: .35; cursor: default; }
+.book-page-status { font: 10px 'DM Sans', sans-serif; color: var(--page-ink); white-space: nowrap; }
+.book-navigation select { width: 100%; max-width: 100%; font: 12px 'DM Sans', sans-serif; color: var(--page-ink); padding: 11px 30px 11px 12px; border: 1px solid var(--page-line); border-radius: 6px; background: var(--page-paper); text-overflow: ellipsis; }
+.book-navigation :focus-visible { outline: 2px solid #80976e; outline-offset: 2px; }
+.book-page-eyebrow { font: 9px/1.6 'DM Sans', sans-serif; text-transform: uppercase; letter-spacing: 1.5px; color: #7b886e; margin: 0 0 14px; overflow-wrap: anywhere; }
+.book-page-body { overflow-wrap: anywhere; }
+.empty-page { font: italic 16px/1.8 Georgia, serif; color: #7c886f; padding: 25px 0; }
+.book-page-body .coding-overview { display: none; }
+.reading-preview .book-reading { --page-paper: #fcfaf2; }
+.reading-preview .book-page-controls { gap: 4px; }
+.reading-preview .book-page-controls button { padding: 6px; font-size: 9px; }
+.reading-preview .book-page-status { font-size: 9px; }
+.reading-preview .book-navigation { padding-top: 0; }
+[data-theme='dark'] .book-reading { --page-paper: #252e27; --page-ink: #e1e5d5; --page-line: #46503f; }
+@media (max-width: 700px) { .book-navigation select { font-size: 16px; } .book-page-controls button { min-height: 42px; } }

@@ -1,7 +1,8 @@
 import './styles.css';
 import { books } from './content.js';
 import { createRoom } from './scene.js';
-import referenceImage from '../landing_page_images/Gemini_Generated_Image_pezvzhpezvzhpezv.png';
+import { mountBookPages } from './book-page-view.js';
+import { BOOKS_PER_SHELF } from './book-pages.js';
 
 const room = document.getElementById('room');
 const targets = document.getElementById('book-targets');
@@ -78,29 +79,13 @@ function openBook(book, button) {
   activeButton = button;
   hidePreview();
   reader.style.setProperty('--book-color', book.color);
+  reader.classList.toggle('long-title', book.title.length > 22);
   document.getElementById('reader-category').textContent = book.category;
   document.getElementById('reader-title').textContent = book.title;
   document.getElementById('reader-volume').textContent = `AKHIL / VOLUME ${book.number}`;
-  document.getElementById('page-number').textContent = book.number;
-  content.replaceChildren(element('h3', book.heading, 'content-heading'), element('p', book.lead, 'content-lead'));
-  for (const section of book.sections) {
-    const sectionElement = element('section', '', 'content-section');
-    sectionElement.append(element('h4', section.title), element('p', section.text));
-    if (section.detail) sectionElement.append(element('span', section.detail, 'content-detail'));
-    content.append(sectionElement);
-  }
-  if (book.showReference) {
-    const figure = element('figure', '', 'reference-figure');
-    const img = document.createElement('img');
-    img.src = referenceImage; img.alt = 'The supplied inspiration image: a warm workspace with trailing plants, a window, wooden desk, and bookshelves.';
-    img.loading = 'lazy';
-    figure.append(img, element('figcaption', 'The original room reference, translated into a 3D scene.'));
-    content.append(figure);
-  }
-  const tags = element('div', '', 'content-tags');
-  tags.append(...book.tags.map(tag => element('span', tag)));
-  content.append(tags);
-  if (book.note) content.append(element('p', book.note, 'sample-note'));
+  mountBookPages(content, book, { onChange: (index, total) => {
+    document.getElementById('page-number').textContent = `${String(index + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
+  } });
   reader.showModal();
   reader.scrollTop = 0;
   document.querySelector('.reader-pages').scrollTop = 0;
@@ -133,10 +118,29 @@ for (const book of books) {
   mobileBook.addEventListener('click', () => openBook(book, mobileBook));
   document.getElementById('mobile-books').append(mobileBook);
 }
+let shelfPage = 0;
+function showShelf(page, control) {
+  const total = Math.ceil(books.length / BOOKS_PER_SHELF);
+  if (page < 0 || page >= total) return;
+  shelfPage = page; hidePreview();
+  const start = page * BOOKS_PER_SHELF, end = Math.min(start + BOOKS_PER_SHELF, books.length);
+  [...targets.children].forEach((button, index) => { button.hidden = index < start || index >= end; });
+  [...document.getElementById('mobile-books').children].forEach((button, index) => { button.hidden = index < start || index >= end; });
+  document.getElementById('shelf-navigation').hidden = total <= 1;
+  document.getElementById('shelf-status').textContent = `Shelf ${page + 1} of ${total} · Books ${start + 1}–${end}`;
+  const previous = document.getElementById('previous-shelf'), next = document.getElementById('next-shelf');
+  previous.disabled = page === 0; next.disabled = page === total - 1;
+  scene?.setShelfPage(page);
+  if (control?.disabled) (control === next ? previous : next).focus({ preventScroll: true });
+}
+document.getElementById('previous-shelf').onclick = event => showShelf(shelfPage - 1, event.currentTarget);
+document.getElementById('next-shelf').onclick = event => showShelf(shelfPage + 1, event.currentTarget);
+document.querySelector('.guide-count').replaceChildren(document.createTextNode(`${books.length} BOOKS`), document.createElement('br'), document.createTextNode('ENDLESS CURIOSITY'));
+showShelf(0);
 closeButton.addEventListener('click', () => reader.close());
 reader.addEventListener('keydown', event => {
   if (event.key !== 'Tab') return;
-  const focusable = [...reader.querySelectorAll('button, a[href], [tabindex="0"]')];
+  const focusable = [...reader.querySelectorAll('button:not(:disabled), select, a[href], summary, [tabindex="0"]')].filter(el => el.getClientRects().length);
   const first = focusable[0], last = focusable.at(-1);
   if (event.shiftKey && document.activeElement === first) {
     event.preventDefault(); last.focus();

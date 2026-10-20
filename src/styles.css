@@ -202,3 +202,10 @@ h1 em { font-weight: 400; color: #78825c; }
 /* Preserve paragraphs written in the book editor. */
 .content-lead, .content-section p, .content-detail, .sample-note { white-space: pre-wrap; overflow-wrap: anywhere; }
 .reader-cover h2, .content-heading, .content-section h4, .content-tags span { overflow-wrap: anywhere; }
+.reader.long-title .reader-cover h2 { font-size: 38px; }
+@media (max-width: 700px) { .reader.long-title .reader-cover h2 { font-size: 29px; } }
+.shelf-navigation { position: absolute; bottom: 55px; right: 7%; z-index: 3; display: flex; align-items: center; justify-content: center; gap: 18px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; }
+.shelf-navigation button { background: transparent; color: inherit; font-size: 11px; padding: 9px; border: 0; cursor: pointer; min-height: 38px; }
+.shelf-navigation button:disabled { opacity: .35; cursor: default; }
+.shelf-navigation span { font-size: 10px; }
+@media (max-width: 760px) { .shelf-navigation { position: relative; right: auto; bottom: auto; margin: 15px 6%; gap: 6px; padding: 5px; } .shelf-navigation span { text-align: center; } }

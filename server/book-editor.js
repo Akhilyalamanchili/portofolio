@@ -3,18 +3,45 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { validateBooks } from '../src/book-schema.js';
+import { createProfileMiner } from './profile-miner.js';
+import { platforms, validUsername } from '../src/coding-data.js';
 
 const sourcePath = fileURLToPath(new URL('../src/books.json', import.meta.url));
 const revision = text => createHash('sha256').update(text).digest('hex');
 const isLoopback = address => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(address);
 
 // File editing exists only in the local development server, never in a build.
-export function bookEditor({ filePath = sourcePath } = {}) {
+export function bookEditor({ filePath = sourcePath, mineProfile = createProfileMiner() } = {}) {
   let saving = false;
   return {
     name: 'local-book-editor',
     apply: 'serve',
     configureServer(server) {
+      server.middlewares.use('/api/profiles', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        const send = (status, data) => { res.statusCode = status; res.end(JSON.stringify(data)); };
+        const host = req.headers.host;
+        if (!isLoopback(req.socket.remoteAddress) || !/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host || '') ||
+          (req.headers.origin && ![`http://${host}`, `https://${host}`].includes(req.headers.origin)) ||
+          req.headers['sec-fetch-site'] === 'cross-site') return send(403, { error: 'Open the importer on localhost.' });
+        if (req.method !== 'POST') return send(405, { error: 'Method not allowed.' });
+        if (!req.headers['content-type']?.startsWith('application/json')) return send(415, { error: 'Send JSON content.' });
+        try {
+          const chunks = []; let bytes = 0;
+          for await (const chunk of req) {
+            bytes += chunk.length;
+            if (bytes > 4096) return send(413, { error: 'Profile request is too large.' });
+            chunks.push(chunk);
+          }
+          let payload;
+          try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return send(400, { error: 'Invalid JSON.' }); }
+          if (!platforms.some(p => p.id === payload?.platform) || !validUsername(payload?.username)) return send(400, { error: 'Choose a supported platform and enter a valid username, not a URL.' });
+          return send(200, await mineProfile(payload.platform, payload.username));
+        } catch {
+          return send(503, { error: 'Could not import this profile. Try again shortly.' });
+        }
+      });
       server.middlewares.use('/api/books', async (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', 'no-store');

@@ -19,7 +19,9 @@ test('renders a real 3D room and each of the twelve books opens its own chapter'
     await button.click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await expect(page.locator('#reader-title')).toHaveText(name);
-    await expect(page.locator('.content-section')).toHaveCount(3);
+    await expect(page.locator('.content-section')).toHaveCount(i < 2 ? 0 : 1);
+    await expect(page.locator('.book-page-status')).toHaveText('Page 1 of 3');
+    if (i < 2) await expect(page.locator('.coding-card')).toHaveCount(1);
     await page.getByRole('button', { name: 'Close book' }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible();
   }
@@ -28,10 +30,10 @@ test('renders a real 3D room and each of the twelve books opens its own chapter'
 
 test('hover gives the matching overview and leaves the reading view closed', async ({ page }) => {
   await ready(page);
-  const button = page.getByRole('button', { name: 'Open Frontend', exact: true });
+  const button = page.getByRole('button', { name: 'Open Competitive Programming', exact: true });
   await button.hover();
   await expect(page.locator('#book-preview')).toBeVisible();
-  await expect(page.locator('#book-preview h2')).toHaveText('Frontend');
+  await expect(page.locator('#book-preview h2')).toHaveText('Competitive Programming');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.mouse.move(40, 40);
   await expect(page.locator('#book-preview')).toBeHidden();
@@ -49,7 +51,14 @@ test('keyboard readers can open and close a book with focus restored', async ({ 
   await page.keyboard.press('Tab');
   await expect(page.getByRole('region', { name: 'Chapter content' })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Close book' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Next page', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.book-page-status')).toHaveText('Page 2 of 3');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.book-page-status')).toHaveText('Page 3 of 3');
+  await expect(page.getByRole('button', { name: 'Previous page', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('.book-page-status')).toHaveText('Page 2 of 3');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(page.locator('#book-targets button').first()).toBeFocused();
@@ -71,6 +80,7 @@ test('mobile supports touch opening, scrolling the full content, and dismissal',
   await expect(curtains).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: 'Open Selected work', exact: true }).tap();
   await expect(page.locator('#reader-title')).toHaveText('Selected work');
+  await page.getByRole('combobox', { name: 'Go to page' }).selectOption('2');
   await page.locator('.sample-note').scrollIntoViewIfNeeded();
   await expect(page.locator('.sample-note')).toBeVisible();
   await page.getByRole('button', { name: 'Close book' }).tap();

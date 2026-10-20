@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { drawSpineTitle } from './spine-title.js';
+import { BOOKS_PER_SHELF } from './book-pages.js';
 
 export function createRoom(container, books, onReady, onFailure) {
   const scene = new THREE.Scene();
@@ -287,7 +288,11 @@ export function createRoom(container, books, onReady, onFailure) {
   });
   const pageEdges = mat('#fff7e4', { map: pageTexture, roughness: .95 });
   const paper = mat('#e7dcc2', { roughness: .95 });
-  books.forEach((book, index) => {
+  const builtShelves = new Set();
+  function buildShelf(shelfPage) {
+    if (builtShelves.has(shelfPage)) return;
+    builtShelves.add(shelfPage);
+    books.slice(shelfPage * BOOKS_PER_SHELF, (shelfPage + 1) * BOOKS_PER_SHELF).forEach((book, index) => {
     const row = index < 6 ? 0 : 1, column = index % 6;
     const width = [.43, .47, .39, .49, .4, .44][column];
     const height = [1.04, 1.13, .98, 1.1, 1.04, 1.14][column] - row * .04;
@@ -295,6 +300,7 @@ export function createRoom(container, books, onReady, onFailure) {
     const x = .29 + column * .53;
     const base = row === 0 ? 2.84 : 1.55;
     group.position.set(x, base + height / 2, -.67);
+    group.userData.baseY = group.position.y;
     room.add(group);
     const cover = mat(book.color, { bumpMap: fabric, bumpScale: .006, roughness: .68 });
     box(width - .055, height - .065, .78, [pageEdges, pageEdges, paper, paper, pageEdges, pageEdges], 0, 0, -.02, group);
@@ -327,8 +333,10 @@ export function createRoom(container, books, onReady, onFailure) {
     }
     const ribbon = box(.035, .16, .015, mat('#c7ac76'), width * .24, -height / 2 - .045, .39, group);
     ribbon.rotation.z = -.06;
-    bookObjects.push({ group, spine, width, height, baseZ: -.67, baseY: group.position.y, book });
-  });
+    bookObjects.push({ group, spine, width, height, baseZ: -.67, baseY: group.position.y, book, shelfPage });
+    });
+  }
+  buildShelf(0);
   // Objects above the shelf are decorative only.
   plant(.5, 4.2, -.83, .8, true);
   plant(3.02, 4.2, -.85, .65);
@@ -574,6 +582,7 @@ export function createRoom(container, books, onReady, onFailure) {
   function projectTargets() {
     const w = container.clientWidth, h = container.clientHeight;
     bookObjects.forEach(({ group, width, height, book }) => {
+      if (!group.visible) return;
       const points = [new THREE.Vector3(-width / 2, -height / 2, .46), new THREE.Vector3(width / 2, -height / 2, .46), new THREE.Vector3(width / 2, height / 2, .46), new THREE.Vector3(-width / 2, height / 2, .46)];
       // Target positions stay on the resting spines so a pulling book cannot trigger hover flicker.
       points.forEach(p => { p.add(new THREE.Vector3(group.position.x, group.userData.baseY, -.67)); p.project(camera); p.set((p.x + 1) * w / 2, (-p.y + 1) * h / 2, 0); });
@@ -605,6 +614,7 @@ export function createRoom(container, books, onReady, onFailure) {
     updateCurtains(delta);
     let booksMoving = false;
     for (const object of bookObjects) {
+      if (!object.group.visible) continue;
       const selected = activeBook === object.book.id;
       const target = object.baseZ + (selected ? .36 : 0);
       const tilt = reducedMotion.matches ? 0 : selected ? -.045 : 0;
@@ -650,6 +660,18 @@ export function createRoom(container, books, onReady, onFailure) {
   resize();
   requestAnimationFrame(() => { onReady(); projectTargets(); });
   return {
+    setShelfPage(page) {
+      if (!Number.isInteger(page) || page < 0 || page >= Math.ceil(books.length / BOOKS_PER_SHELF)) return;
+      activeBook = null;
+      buildShelf(page);
+      for (const object of bookObjects) {
+        object.group.visible = object.shelfPage === page;
+        object.group.position.z = object.baseZ;
+        object.group.rotation.x = 0;
+      }
+      renderer.shadowMap.needsUpdate = true;
+      projectTargets(); requestRender();
+    },
     hover(id) { activeBook = id; requestRender(); },
     setLamp(on) {
       lampTarget = on ? 1 : 0;
